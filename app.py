@@ -11,26 +11,43 @@ st.set_page_config(
 
 st.title("📊 Zepto Reports Merger & Intelligence Dashboard")
 st.markdown(
-    "Upload your raw performance reports to analyze metrics, compare weekly/monthly performance, and download formatted workbooks."
+    "Upload any combination of raw performance reports below. The app will"
+    " automatically identify their type and process them!"
 )
 
 st.sidebar.header("📁 File Upload Center")
-st.sidebar.markdown(
-    "Upload multiple files representing different weeks or months."
+uploaded_files = st.sidebar.file_uploader(
+    "Upload All Raw Files (Campaign, City, Product, Keyword)",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
 )
 
-campaign_files = st.sidebar.file_uploader(
-    "Campaign Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-city_files = st.sidebar.file_uploader(
-    "City Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-product_files = st.sidebar.file_uploader(
-    "Product Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-keyword_files = st.sidebar.file_uploader(
-    "Keyword Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
+
+def classify_and_split_files(files):
+  campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
+
+  for f in files:
+    try:
+      df = pd.read_excel(f)
+      cols = set(df.columns)
+
+      # Signature column checks
+      if "CampaignName" in cols or "CampaignType" in cols:
+        df["Source_File"] = f.name
+        campaign_dfs.append(df)
+      elif "CityName" in cols:
+        df["Source_File"] = f.name
+        city_dfs.append(df)
+      elif "ProductID" in cols or "ProductName" in cols:
+        df["Source_File"] = f.name
+        product_dfs.append(df)
+      elif "KeywordName" in cols:
+        df["Source_File"] = f.name
+        keyword_dfs.append(df)
+    except Exception as e:
+      st.error(f"Error reading {f.name}: {e}")
+
+  return campaign_dfs, city_dfs, product_dfs, keyword_dfs
 
 
 def extract_month_from_name(filename):
@@ -45,17 +62,19 @@ def extract_month_from_name(filename):
 
 
 # Main Dashboard Logic
-if campaign_files or city_files or product_files or keyword_files:
-  all_campaigns = []
-  for f in campaign_files:
-    df = pd.read_excel(f)
-    df["Source_File"] = f.name
-    df["Month"] = extract_month_from_name(f.name)
-    all_campaigns.append(df)
+if uploaded_files:
+  campaign_list, city_list, product_list, keyword_list = (
+      classify_and_split_files(uploaded_files)
+  )
 
-  if all_campaigns:
-    master_campaign_df = pd.concat(all_campaigns, ignore_index=True)
+  st.sidebar.success(
+      f"Identified: {len(campaign_list)} Campaign, {len(city_list)} City,"
+      f" {len(product_list)} Product, {len(keyword_list)} Keyword files."
+  )
 
+  # Executive KPI Summary
+  if campaign_list:
+    master_campaign_df = pd.concat(campaign_list, ignore_index=True)
     total_sales = (
         master_campaign_df["Revenue"].sum()
         if "Revenue" in master_campaign_df.columns
@@ -106,7 +125,7 @@ if campaign_files or city_files or product_files or keyword_files:
   with tabs[0]:
     st.header("Monthly Comparison & Breakdown")
     st.markdown(
-        "Preview and download aggregated monthly performance across all raw"
+        "Preview and download aggregated monthly performance across all"
         " dimensions."
     )
 
@@ -116,63 +135,59 @@ if campaign_files or city_files or product_files or keyword_files:
 
     with m_tab1:
       st.subheader("Campaign Monthly View")
-      if campaign_files:
-        combined_camp = pd.concat(
-            [pd.read_excel(f) for f in campaign_files], ignore_index=True
+      if campaign_list:
+        st.dataframe(
+            pd.concat(campaign_list, ignore_index=True), use_container_width=True
         )
-        st.dataframe(combined_camp, use_container_width=True)
       else:
-        st.info("Please upload campaign raw files.")
+        st.info("No campaign files detected.")
 
     with m_tab2:
       st.subheader("City Monthly View")
-      if city_files:
-        combined_city = pd.concat(
-            [pd.read_excel(f) for f in city_files], ignore_index=True
+      if city_list:
+        st.dataframe(
+            pd.concat(city_list, ignore_index=True), use_container_width=True
         )
-        st.dataframe(combined_city, use_container_width=True)
       else:
-        st.info("Please upload city raw files.")
+        st.info("No city files detected.")
 
     with m_tab3:
       st.subheader("Product Monthly View")
-      if product_files:
-        combined_prod = pd.concat(
-            [pd.read_excel(f) for f in product_files], ignore_index=True
+      if product_list:
+        st.dataframe(
+            pd.concat(product_list, ignore_index=True), use_container_width=True
         )
-        st.dataframe(combined_prod, use_container_width=True)
       else:
-        st.info("Please upload product raw files.")
+        st.info("No product files detected.")
 
     with m_tab4:
       st.subheader("Keyword Monthly View")
-      if keyword_files:
-        combined_kw = pd.concat(
-            [pd.read_excel(f) for f in keyword_files], ignore_index=True
+      if keyword_list:
+        st.dataframe(
+            pd.concat(keyword_list, ignore_index=True), use_container_width=True
         )
-        st.dataframe(combined_kw, use_container_width=True)
       else:
-        st.info("Please upload keyword raw files.")
+        st.info("No keyword files detected.")
 
     st.markdown("---")
     monthly_output = io.BytesIO()
     with pd.ExcelWriter(monthly_output, engine="xlsxwriter") as writer:
-      if campaign_files:
-        pd.concat(
-            [pd.read_excel(f) for f in campaign_files], ignore_index=True
-        ).to_excel(writer, sheet_name="Campaign Monthly", index=False)
-      if city_files:
-        pd.concat(
-            [pd.read_excel(f) for f in city_files], ignore_index=True
-        ).to_excel(writer, sheet_name="City Monthly", index=False)
-      if product_files:
-        pd.concat(
-            [pd.read_excel(f) for f in product_files], ignore_index=True
-        ).to_excel(writer, sheet_name="Product Monthly", index=False)
-      if keyword_files:
-        pd.concat(
-            [pd.read_excel(f) for f in keyword_files], ignore_index=True
-        ).to_excel(writer, sheet_name="Keyword Monthly", index=False)
+      if campaign_list:
+        pd.concat(campaign_list, ignore_index=True).to_excel(
+            writer, sheet_name="Campaign Monthly", index=False
+        )
+      if city_list:
+        pd.concat(city_list, ignore_index=True).to_excel(
+            writer, sheet_name="City Monthly", index=False
+        )
+      if product_list:
+        pd.concat(product_list, ignore_index=True).to_excel(
+            writer, sheet_name="Product Monthly", index=False
+        )
+      if keyword_list:
+        pd.concat(keyword_list, ignore_index=True).to_excel(
+            writer, sheet_name="Keyword Monthly", index=False
+        )
 
     st.download_button(
         label="📥 Download Monthly Comparison Excel",
@@ -185,11 +200,6 @@ if campaign_files or city_files or product_files or keyword_files:
   # 2. Weekly Comparison Tab
   with tabs[1]:
     st.header("Weekly Comparison (Multi-Week Views)")
-    st.markdown(
-        "Side-by-side weekly performance tracking matching the exact report"
-        " template format."
-    )
-
     w_subtabs = st.tabs([
         "WOW",
         "Campaign V",
@@ -222,9 +232,9 @@ if campaign_files or city_files or product_files or keyword_files:
       )
 
     with w_subtabs[1]:
-      st.subheader("Campaign V (Comparative)")
-      if campaign_files:
-        df_c_v = pd.read_excel(campaign_files[0])
+      st.subheader("Campaign V")
+      if campaign_list:
+        df_c_v = campaign_list[0]
         st.dataframe(df_c_v, use_container_width=True)
         st.download_button(
             "📥 Download Campaign V Tab",
@@ -250,8 +260,8 @@ if campaign_files or city_files or product_files or keyword_files:
 
     with w_subtabs[3]:
       st.subheader("Product V")
-      if product_files:
-        df_p_v = pd.read_excel(product_files[0])
+      if product_list:
+        df_p_v = product_list[0]
         st.dataframe(df_p_v, use_container_width=True)
         st.download_button(
             "📥 Download Product V Tab",
@@ -262,8 +272,8 @@ if campaign_files or city_files or product_files or keyword_files:
 
     with w_subtabs[4]:
       st.subheader("Keyword V")
-      if keyword_files:
-        df_k_v = pd.read_excel(keyword_files[0])
+      if keyword_list:
+        df_k_v = keyword_list[0]
         st.dataframe(df_k_v, use_container_width=True)
         st.download_button(
             "📥 Download Keyword V Tab",
@@ -274,8 +284,8 @@ if campaign_files or city_files or product_files or keyword_files:
 
     with w_subtabs[5]:
       st.subheader("City V")
-      if city_files:
-        df_ci_v = pd.read_excel(city_files[0])
+      if city_list:
+        df_ci_v = city_list[0]
         st.dataframe(df_ci_v, use_container_width=True)
         st.download_button(
             "📥 Download City V Tab",
@@ -287,10 +297,8 @@ if campaign_files or city_files or product_files or keyword_files:
   # 3. Campaign Overview Tab
   with tabs[2]:
     st.header("🎯 Campaign Overview")
-    if campaign_files:
-      df_camp = pd.concat(
-          [pd.read_excel(f) for f in campaign_files], ignore_index=True
-      )
+    if campaign_list:
+      df_camp = pd.concat(campaign_list, ignore_index=True)
       summary_camp = (
           df_camp.groupby("CampaignName")
           .agg({
@@ -305,15 +313,13 @@ if campaign_files or city_files or product_files or keyword_files:
       )
       st.dataframe(summary_camp, use_container_width=True)
     else:
-      st.info("Upload campaign files to view campaign overview.")
+      st.info("Upload campaign files to view overview.")
 
   # 4. Campaign Type Overview Tab
   with tabs[3]:
     st.header("🏷️ Campaign Type Overview")
-    if campaign_files:
-      df_camp = pd.concat(
-          [pd.read_excel(f) for f in campaign_files], ignore_index=True
-      )
+    if campaign_list:
+      df_camp = pd.concat(campaign_list, ignore_index=True)
       if "CampaignType" in df_camp.columns:
         summary_ctype = (
             df_camp.groupby("CampaignType")
@@ -329,15 +335,13 @@ if campaign_files or city_files or product_files or keyword_files:
         )
         st.dataframe(summary_ctype, use_container_width=True)
     else:
-      st.info("Upload campaign files to view campaign type overview.")
+      st.info("Upload campaign files to view overview.")
 
   # 5. Product Overview Tab
   with tabs[4]:
     st.header("📦 Product Overview")
-    if product_files:
-      df_prod = pd.concat(
-          [pd.read_excel(f) for f in product_files], ignore_index=True
-      )
+    if product_list:
+      df_prod = pd.concat(product_list, ignore_index=True)
       summary_prod = (
           df_prod.groupby("ProductName")
           .agg({
@@ -352,15 +356,13 @@ if campaign_files or city_files or product_files or keyword_files:
       )
       st.dataframe(summary_prod, use_container_width=True)
     else:
-      st.info("Upload product files to view product overview.")
+      st.info("Upload product files to view overview.")
 
   # 6. Keyword Overview Tab
   with tabs[5]:
     st.header("🔍 Keyword Overview")
-    if keyword_files:
-      df_kw = pd.concat(
-          [pd.read_excel(f) for f in keyword_files], ignore_index=True
-      )
+    if keyword_list:
+      df_kw = pd.concat(keyword_list, ignore_index=True)
       summary_kw = (
           df_kw.groupby("KeywordName")
           .agg({
@@ -375,15 +377,13 @@ if campaign_files or city_files or product_files or keyword_files:
       )
       st.dataframe(summary_kw, use_container_width=True)
     else:
-      st.info("Upload keyword files to view keyword overview.")
+      st.info("Upload keyword files to view overview.")
 
   # 7. City Overview Tab
   with tabs[6]:
     st.header("🏙️ City Overview")
-    if city_files:
-      df_city = pd.concat(
-          [pd.read_excel(f) for f in city_files], ignore_index=True
-      )
+    if city_list:
+      df_city = pd.concat(city_list, ignore_index=True)
       summary_city = (
           df_city.groupby("CityName")
           .agg({
@@ -398,7 +398,9 @@ if campaign_files or city_files or product_files or keyword_files:
       )
       st.dataframe(summary_city, use_container_width=True)
     else:
-      st.info("Upload city files to view city overview.")
+      st.info("Upload city files to view overview.")
 
 else:
-  st.info("👈 Please upload your raw files in the sidebar to load the dashboard.")
+  st.info(
+      "👈 Please upload your raw performance files in the sidebar to start."
+  )
