@@ -1,10 +1,3 @@
-You are entirely right—having repetitive individual headings above each upload button makes the sidebar cluttered. Instead, we can use a **single, uniform, clean multi-file uploader button** that accepts multiple files at once, with **no separate text headings**, and automatically recognizes and sorts every file type behind the scenes!
-
-Here is the clean, updated code for **`app.py`** with a single uniform upload button:
-
-### `app.py`
-
-```python
 import io
 import re
 import pandas as pd
@@ -445,5 +438,3 @@ else:
       "👈 Please upload your performance files in the sidebar to load the"
       " dashboard."
   )
-
-```
