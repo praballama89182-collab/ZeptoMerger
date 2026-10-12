@@ -202,8 +202,8 @@ if has_data:
 
   st.markdown("<br>", unsafe_allow_html=True)
 
-  # Helper function to generate V-format aggregated summaries for exports & tabs
-  def get_aggregated_summary(dfs_list, entity_col):
+  # Helper function to generate V-format aggregated summaries with STRICT NUMERIC TYPES
+  def get_aggregated_summary(dfs_list, entity_col, for_export=False):
     if not dfs_list:
       return pd.DataFrame()
     combined_df = pd.concat(dfs_list, ignore_index=True)
@@ -223,14 +223,33 @@ if has_data:
         })
         .reset_index()
     )
-    summary["CTR"] = (summary["Clicks"] / summary["Impressions"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
-    summary["CPC"] = (summary["Spend"] / summary["Clicks"].replace(0, 1)).apply(lambda x: f"₹{x:.2f}")
-    summary["Acos"] = (summary["Spend"] / summary["Revenue"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
-    summary["CVR"] = (summary["Orders"] / summary["Clicks"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
-    summary["Roas"] = summary["Roas"].apply(lambda x: round(x, 2))
+    
+    # Calculate numeric metrics
+    summary["CTR"] = summary["Clicks"] / summary["Impressions"].replace(0, 1) * 100
+    summary["CPC"] = summary["Spend"] / summary["Clicks"].replace(0, 1)
+    summary["Acos"] = summary["Spend"] / summary["Revenue"].replace(0, 1) * 100
+    summary["CVR"] = summary["Orders"] / summary["Clicks"].replace(0, 1) * 100
+    summary["Roas"] = summary["Roas"].round(2)
+
+    # Reorder columns standard V format
+    cols_order = [entity_col, "Impressions", "Clicks", "Spend", "Orders", "Revenue", "Atc", "Roas", "CTR", "CPC", "Acos", "CVR"]
+    summary = summary[[c for c in cols_order if c in summary.columns]]
+
+    if not for_export:
+      # Display formatting for Streamlit UI
+      summary["CTR"] = summary["CTR"].apply(lambda x: f"{x:.2f}%")
+      summary["CPC"] = summary["CPC"].apply(lambda x: f"₹{x:.2f}")
+      summary["Acos"] = summary["Acos"].apply(lambda x: f"{x:.2f}%")
+      summary["CVR"] = summary["CVR"].apply(lambda x: f"{x:.2f}%")
+    else:
+      # Keep numeric types pure for Excel export
+      for col in ["Impressions", "Clicks", "Spend", "Orders", "Revenue", "Atc", "Roas", "CTR", "CPC", "Acos", "CVR"]:
+        if col in summary.columns:
+          summary[col] = pd.to_numeric(summary[col], errors='coerce')
+          
     return summary
 
-  # Helper function for Excel export with proper formatting
+  # Helper function for Excel export with proper formatting and numeric cell writing
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -247,6 +266,11 @@ if has_data:
       
       left_cell_format = workbook.add_format({'border': 1, 'align': 'left', 'valign': 'vcenter'})
       center_cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
+      
+      # Number formats
+      currency_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '₹#,##0.00'})
+      percent_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '0.00%'})
+      int_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '#,##0'})
 
       for sheet_name, df in sheets_dict.items():
         if df is not None and not df.empty:
@@ -258,9 +282,23 @@ if has_data:
             
           for row_num in range(1, len(df) + 1):
             for col_num in range(len(df.columns)):
+              col_name = df.columns[col_num]
               val = df.iat[row_num - 1, col_num]
-              cell_fmt = left_cell_format if col_num == 0 else center_cell_format
-              worksheet.write(row_num, col_num, val, cell_fmt)
+              
+              if col_num == 0:
+                worksheet.write(row_num, col_num, val, left_cell_format)
+              else:
+                # Apply appropriate numeric Excel format without converting to text
+                if pd.isna(val):
+                  worksheet.write(row_num, col_num, "", center_cell_format)
+                elif col_name in ['Revenue', 'Spend', 'CPC']:
+                  worksheet.write_number(row_num, col_num, float(val), currency_format)
+                elif col_name in ['CTR', 'Acos', 'CVR']:
+                  worksheet.write_number(row_num, col_num, float(val) / 100.0, percent_format)
+                elif col_name in ['Impressions', 'Clicks', 'Orders', 'Atc']:
+                  worksheet.write_number(row_num, col_num, int(val), int_format)
+                else:
+                  worksheet.write(row_num, col_num, val, center_cell_format)
 
           for idx, col in enumerate(df.columns):
             max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 3
@@ -304,7 +342,7 @@ if has_data:
               combined_df["Derived_Week"] == selected_week
           ]
 
-      summary = get_aggregated_summary([combined_df], entity_col)
+      summary = get_aggregated_summary([combined_df], entity_col, for_export=False)
       st.dataframe(summary, use_container_width=True)
     else:
       st.info(f"No data available for {title}.")
@@ -317,6 +355,7 @@ if has_data:
     mom_subtabs = st.tabs([
         "MOM",
         "Campaign V",
+        "Campaign Type V",
         "City V",
         "Product V",
         "Keyword V",
@@ -353,15 +392,20 @@ if has_data:
 
     with mom_subtabs[2]:
       render_isolated_subtab(
-          city_dfs, "CityName", "Monthly City V", filter_mode="month"
+          campaign_dfs, "CampaignType", "Monthly Campaign Type V", filter_mode="month"
       )
 
     with mom_subtabs[3]:
       render_isolated_subtab(
-          product_dfs, "ProductName", "Monthly Product V", filter_mode="month"
+          city_dfs, "CityName", "Monthly City V", filter_mode="month"
       )
 
     with mom_subtabs[4]:
+      render_isolated_subtab(
+          product_dfs, "ProductName", "Monthly Product V", filter_mode="month"
+      )
+
+    with mom_subtabs[5]:
       render_isolated_subtab(
           keyword_dfs, "KeywordName", "Monthly Keyword V", filter_mode="month"
       )
@@ -369,10 +413,11 @@ if has_data:
     st.markdown("---")
     monthly_sheets = {
         "MOM Summary": pd.DataFrame({"Duration": ["November", "December"], "Revenue": [12500000, 16800000]}),
-        "Campaign Monthly": get_aggregated_summary(campaign_dfs, "CampaignName"),
-        "City Monthly": get_aggregated_summary(city_dfs, "CityName"),
-        "Product Monthly": get_aggregated_summary(product_dfs, "ProductName"),
-        "Keyword Monthly": get_aggregated_summary(keyword_dfs, "KeywordName"),
+        "Campaign Monthly": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
+        "Campaign Type Monthly": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
+        "City Monthly": get_aggregated_summary(city_dfs, "CityName", for_export=True),
+        "Product Monthly": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
+        "Keyword Monthly": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
     }
     st.download_button(
         label="📥 Download All Monthly Tabs (Excel Workbook)",
@@ -430,17 +475,9 @@ if has_data:
       )
 
     with wow_subtabs[2]:
-      st.subheader("Campaign Type V")
-      if campaign_dfs:
-        c_type_df = pd.concat(campaign_dfs, ignore_index=True)
-        if "Derived_Week" in c_type_df.columns:
-          weeks = sorted(c_type_df["Derived_Week"].unique(), reverse=True)
-          sel_w = st.selectbox("Choose Week", ["All Weeks"] + weeks, key="ctype_week_filter")
-          if sel_w != "All Weeks":
-            c_type_df = c_type_df[c_type_df["Derived_Week"] == sel_w]
-        if "CampaignType" in c_type_df.columns:
-          ctype_summary = get_aggregated_summary([c_type_df], "CampaignType")
-          st.dataframe(ctype_summary, use_container_width=True)
+      render_isolated_subtab(
+          campaign_dfs, "CampaignType", "Weekly Campaign Type V", filter_mode="week"
+      )
 
     with wow_subtabs[3]:
       render_isolated_subtab(
@@ -460,10 +497,11 @@ if has_data:
     st.markdown("---")
     weekly_sheets = {
         "WOW Summary": wow_df,
-        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName"),
-        "City V": get_aggregated_summary(city_dfs, "CityName"),
-        "Product V": get_aggregated_summary(product_dfs, "ProductName"),
-        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName"),
+        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
+        "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
+        "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
+        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
+        "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
     }
     st.download_button(
         label="📥 Download All Weekly Tabs (Excel Workbook)",
@@ -479,17 +517,9 @@ if has_data:
     )
 
   with main_tabs[3]:
-    st.header("🏷️ Campaign Type V Overview")
-    if campaign_dfs:
-      df_ct = pd.concat(campaign_dfs, ignore_index=True)
-      if "Derived_Week" in df_ct.columns:
-        weeks = sorted(df_ct["Derived_Week"].unique(), reverse=True)
-        sel_w = st.selectbox("Choose Week", ["All Weeks"] + weeks, key="main_ctype_filter")
-        if sel_w != "All Weeks":
-          df_ct = df_ct[df_ct["Derived_Week"] == sel_w]
-      if "CampaignType" in df_ct.columns:
-        summary_ct = get_aggregated_summary([df_ct], "CampaignType")
-        st.dataframe(summary_ct, use_container_width=True)
+    render_isolated_subtab(
+        campaign_dfs, "CampaignType", "Campaign Type V Overview", filter_mode="week"
+    )
 
   with main_tabs[4]:
     render_isolated_subtab(
