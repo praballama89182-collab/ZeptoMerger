@@ -202,7 +202,7 @@ if has_data:
 
   st.markdown("<br>", unsafe_allow_html=True)
 
-  # Helper function to generate V-format aggregated summaries with STRICT NUMERIC TYPES
+  # Helper function to generate V-format aggregated summaries
   def get_aggregated_summary(dfs_list, entity_col, for_export=False):
     if not dfs_list:
       return pd.DataFrame()
@@ -224,32 +224,28 @@ if has_data:
         .reset_index()
     )
     
-    # Calculate numeric metrics
     summary["CTR"] = summary["Clicks"] / summary["Impressions"].replace(0, 1) * 100
     summary["CPC"] = summary["Spend"] / summary["Clicks"].replace(0, 1)
     summary["Acos"] = summary["Spend"] / summary["Revenue"].replace(0, 1) * 100
     summary["CVR"] = summary["Orders"] / summary["Clicks"].replace(0, 1) * 100
     summary["Roas"] = summary["Roas"].round(2)
 
-    # Reorder columns standard V format
     cols_order = [entity_col, "Impressions", "Clicks", "Spend", "Orders", "Revenue", "Atc", "Roas", "CTR", "CPC", "Acos", "CVR"]
     summary = summary[[c for c in cols_order if c in summary.columns]]
 
     if not for_export:
-      # Display formatting for Streamlit UI
       summary["CTR"] = summary["CTR"].apply(lambda x: f"{x:.2f}%")
       summary["CPC"] = summary["CPC"].apply(lambda x: f"₹{x:.2f}")
       summary["Acos"] = summary["Acos"].apply(lambda x: f"{x:.2f}%")
       summary["CVR"] = summary["CVR"].apply(lambda x: f"{x:.2f}%")
     else:
-      # Keep numeric types pure for Excel export
       for col in ["Impressions", "Clicks", "Spend", "Orders", "Revenue", "Atc", "Roas", "CTR", "CPC", "Acos", "CVR"]:
         if col in summary.columns:
           summary[col] = pd.to_numeric(summary[col], errors='coerce')
           
     return summary
 
-  # Helper function for Excel export with proper formatting and numeric cell writing
+  # Helper function for Excel export with robust value cleaning
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -267,10 +263,10 @@ if has_data:
       left_cell_format = workbook.add_format({'border': 1, 'align': 'left', 'valign': 'vcenter'})
       center_cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
       
-      # Number formats
       currency_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '₹#,##0.00'})
       percent_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '0.00%'})
       int_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '#,##0'})
+      float_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter', 'num_format': '0.02'})
 
       for sheet_name, df in sheets_dict.items():
         if df is not None and not df.empty:
@@ -288,15 +284,29 @@ if has_data:
               if col_num == 0:
                 worksheet.write(row_num, col_num, val, left_cell_format)
               else:
-                # Apply appropriate numeric Excel format without converting to text
                 if pd.isna(val):
                   worksheet.write(row_num, col_num, "", center_cell_format)
-                elif col_name in ['Revenue', 'Spend', 'CPC']:
+                  continue
+                  
+                # Clean string representations if any exist
+                if isinstance(val, str):
+                  clean_str = val.replace('₹', '').replace('%', '').replace(',', '').strip()
+                  try:
+                    val = float(clean_str)
+                  except:
+                    worksheet.write(row_num, col_num, val, center_cell_format)
+                    continue
+
+                if col_name in ['Revenue', 'Spend', 'CPC']:
                   worksheet.write_number(row_num, col_num, float(val), currency_format)
                 elif col_name in ['CTR', 'Acos', 'CVR']:
-                  worksheet.write_number(row_num, col_num, float(val) / 100.0, percent_format)
+                  # If percentage is already in 0-100 range, divide by 100 for Excel percent format
+                  num_val = float(val) / 100.0 if float(val) > 1 else float(val)
+                  worksheet.write_number(row_num, col_num, num_val, percent_format)
                 elif col_name in ['Impressions', 'Clicks', 'Orders', 'Atc']:
-                  worksheet.write_number(row_num, col_num, int(val), int_format)
+                  worksheet.write_number(row_num, col_num, int(float(val)), int_format)
+                elif col_name == 'Roas':
+                  worksheet.write_number(row_num, col_num, float(val), float_format)
                 else:
                   worksheet.write(row_num, col_num, val, center_cell_format)
 
@@ -413,11 +423,11 @@ if has_data:
     st.markdown("---")
     monthly_sheets = {
         "MOM Summary": pd.DataFrame({"Duration": ["November", "December"], "Revenue": [12500000, 16800000]}),
-        "Campaign Monthly": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
-        "Campaign Type Monthly": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
-        "City Monthly": get_aggregated_summary(city_dfs, "CityName", for_export=True),
-        "Product Monthly": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
-        "Keyword Monthly": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
+        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
+        "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
+        "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
+        "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
+        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
     }
     st.download_button(
         label="📥 Download All Monthly Tabs (Excel Workbook)",
