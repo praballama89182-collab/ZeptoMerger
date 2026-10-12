@@ -245,7 +245,7 @@ if has_data:
           
     return summary
 
-  # Helper function for Excel export with tight column spacing
+  # Helper function for Excel export with generous sizing for Revenue and Spend
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -308,11 +308,14 @@ if has_data:
                 else:
                   worksheet.write(row_num, col_num, val, center_cell_format)
 
-          # Tight spacing column widths for maximum visible columns on screen
+          # Column sizing with generous width for Revenue and Spend to avoid '###'
           for idx, col in enumerate(df.columns):
             max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 1
-            tight_width = max(max_len, 9)
-            worksheet.set_column(idx, idx, tight_width)
+            if col in ['Revenue', 'Spend']:
+              width = max(max_len, 16) # Ensuring large currency numbers fit comfortably
+            else:
+              width = max(max_len, 9)
+            worksheet.set_column(idx, idx, width)
             
     return output.getvalue()
 
