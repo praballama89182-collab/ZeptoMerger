@@ -245,7 +245,7 @@ if has_data:
           
     return summary
 
-  # Helper function for Excel export with customized column widths
+  # Helper function for Excel export with squeezed column spacing & protected Revenue/Spend
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -308,14 +308,15 @@ if has_data:
                 else:
                   worksheet.write(row_num, col_num, val, center_cell_format)
 
+          # Squeezed column sizing for maximum visibility, keeping Revenue & Spend protected
           for idx, col in enumerate(df.columns):
             max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 1
             if col in ['Revenue', 'Spend']:
-              width = max(max_len, 16)
+              width = max(max_len, 16) # Protected generous width
             elif col == 'ProductName':
               width = max(int(max_len * 0.3), 12)
             else:
-              width = max(max_len, 9)
+              width = max(max_len, 7) # Squeezed tight for metrics
             worksheet.set_column(idx, idx, width)
             
     return output.getvalue()
@@ -426,7 +427,7 @@ if has_data:
 
     st.markdown("---")
     monthly_sheets = {
-        "MOM Summary": pd.DataFrame({"Duration": ["November", "December"], "Revenue": [12500000, 16800000]}),
+        "MOM Summary": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
         "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
         "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
         "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
