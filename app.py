@@ -19,9 +19,6 @@ st.markdown(
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         margin-bottom: 20px;
     }
-    .metric-container {
-        text-align: center;
-    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -34,31 +31,44 @@ st.markdown(
 
 st.sidebar.header("📁 File Upload Center")
 st.sidebar.markdown(
-    "Upload multiple files across your performance categories:"
+    "Use the 5 upload buttons below. Each supports multiple file uploads"
+    " simultaneously and automatically recognizes file types."
 )
 
 # 5 Separate Multi-Upload Buttons in Sidebar
-up_campaigns = st.sidebar.file_uploader(
-    "Campaign Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-up_cities = st.sidebar.file_uploader(
-    "City Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-up_products = st.sidebar.file_uploader(
-    "Product Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-up_keywords = st.sidebar.file_uploader(
-    "Keyword Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
-)
-up_extras = st.sidebar.file_uploader(
-    "Additional / Archive Files",
+up_campaign_files = st.sidebar.file_uploader(
+    "Upload Campaign Files (Multi-select)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
+    key="camp_up",
+)
+up_city_files = st.sidebar.file_uploader(
+    "Upload City Files (Multi-select)",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+    key="city_up",
+)
+up_product_files = st.sidebar.file_uploader(
+    "Upload Product Files (Multi-select)",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+    key="prod_up",
+)
+up_keyword_files = st.sidebar.file_uploader(
+    "Upload Keyword Files (Multi-select)",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+    key="kw_up",
+)
+up_extra_files = st.sidebar.file_uploader(
+    "Upload Archive / Mixed Files (Auto-recognize)",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+    key="extra_up",
 )
 
 
 def extract_period_info(filename_or_text):
-  # Extract month or week patterns from file name or duration text
   text = str(filename_or_text)
   m_match = re.search(
       r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", text, re.IGNORECASE
@@ -70,76 +80,96 @@ def extract_period_info(filename_or_text):
   return month, week
 
 
-# Combine uploaded data safely
+# Lists to hold processed DataFrames
 campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
 
-for f in up_campaigns or []:
-  df = pd.read_excel(f)
-  df["Source_File"] = f.name
-  mo, wk = extract_period_info(f.name)
-  df["Derived_Month"] = mo
-  df["Derived_Week"] = wk
-  campaign_dfs.append(df)
 
-for f in up_cities or []:
-  df = pd.read_excel(f)
-  df["Source_File"] = f.name
-  mo, wk = extract_period_info(f.name)
-  df["Derived_Month"] = mo
-  df["Derived_Week"] = wk
-  city_dfs.append(df)
+def process_and_categorize(file_list, category_hint=None):
+  for f in file_list:
+    try:
+      df = pd.read_excel(f)
+      df["Source_File"] = f.name
+      mo, wk = extract_period_info(f.name)
+      df["Derived_Month"] = mo
+      df["Derived_Week"] = wk
 
-for f in up_products or []:
-  df = pd.read_excel(f)
-  df["Source_File"] = f.name
-  mo, wk = extract_period_info(f.name)
-  df["Derived_Month"] = mo
-  df["Derived_Week"] = wk
-  product_dfs.append(df)
+      cols = set(df.columns)
+      cat = category_hint
 
-for f in up_keywords or []:
-  df = pd.read_excel(f)
-  df["Source_File"] = f.name
-  mo, wk = extract_period_info(f.name)
-  df["Derived_Month"] = mo
-  df["Derived_Week"] = wk
-  keyword_dfs.append(df)
+      if not cat:
+        if "CampaignName" in cols or "CampaignType" in cols:
+          cat = "campaign"
+        elif "CityName" in cols:
+          cat = "city"
+        elif "ProductID" in cols or "ProductName" in cols:
+          cat = "product"
+        elif "KeywordName" in cols:
+          cat = "keyword"
 
-for f in up_extras or []:
-  try:
-    df = pd.read_excel(f)
-    df["Source_File"] = f.name
-    mo, wk = extract_period_info(f.name)
-    df["Derived_Month"] = mo
-    df["Derived_Week"] = wk
-    cols = set(df.columns)
-    if "CampaignName" in cols:
-      campaign_dfs.append(df)
-    elif "CityName" in cols:
-      city_files.append(df)
-    elif "ProductName" in cols:
-      product_dfs.append(df)
-    elif "KeywordName" in cols:
-      keyword_dfs.append(df)
-  except:
-    pass
+      if cat == "campaign":
+        campaign_dfs.append(df)
+      elif cat == "city":
+        city_dfs.append(df)
+      elif cat == "product":
+        product_dfs.append(df)
+      elif cat == "keyword":
+        keyword_dfs.append(df)
+    except Exception as e:
+      st.sidebar.error(f"Error reading {f.name}: {e}")
 
-# Check if data exists
+
+# Process all 5 uploaders with precise routing and auto-recognition
+process_and_categorize(up_campaign_files, "campaign")
+process_and_categorize(up_city_files, "city")
+process_and_categorize(up_product_files, "product")
+process_and_categorize(up_keyword_files, "keyword")
+process_and_categorize(up_extra_files, None)  # Auto-recognize mixed/archive files
+
 has_data = bool(
-    campaign_dfs or city_dfs or product_dfs or keyword_dfs or up_extras
+    campaign_dfs
+    or city_dfs
+    or product_dfs
+    or keyword_dfs
+    or up_campaign_files
+    or up_city_files
+    or up_product_files
+    or up_keyword_files
+    or up_extra_files
 )
 
 if has_data:
   master_camp = (
-      pd.concat(campaign_dfs, ignore_index=True) if campaign_dfs else pd.DataFrame()
+      pd.concat(campaign_dfs, ignore_index=True)
+      if campaign_dfs
+      else pd.DataFrame()
   )
 
   # Overall Summary Card (Compact Light Blue Curved Box)
-  tot_sales = master_camp["Revenue"].sum() if "Revenue" in master_camp.columns else 0
-  tot_spend = master_camp["Spend"].sum() if "Spend" in master_camp.columns else 0
-  tot_orders = master_camp["Orders"].sum() if "Orders" in master_camp.columns else 0
-  tot_atc = master_camp["Atc"].sum() if "Atc" in master_camp.columns else 0
-  avg_roas = master_camp["Roas"].mean() if "Roas" in master_camp.columns else 0
+  tot_sales = (
+      master_camp["Revenue"].sum()
+      if not master_camp.empty and "Revenue" in master_camp.columns
+      else 0
+  )
+  tot_spend = (
+      master_camp["Spend"].sum()
+      if not master_camp.empty and "Spend" in master_camp.columns
+      else 0
+  )
+  tot_orders = (
+      master_camp["Orders"].sum()
+      if not master_camp.empty and "Orders" in master_camp.columns
+      else 0
+  )
+  tot_atc = (
+      master_camp["Atc"].sum()
+      if not master_camp.empty and "Atc" in master_camp.columns
+      else 0
+  )
+  avg_roas = (
+      master_camp["Roas"].mean()
+      if not master_camp.empty and "Roas" in master_camp.columns
+      else 0
+  )
 
   st.markdown("### Overall Summary")
   st.markdown(
@@ -179,10 +209,9 @@ if has_data:
 
   # --- TAB 1: Monthly Comparison (MOM) ---
   with main_tabs[0]:
-    st.setHeader = "Monthly Comparison & MOM Analysis"
+    st.header("Monthly Comparison & MOM Analysis")
     st.markdown("Analyze monthly performance, trends, and dimension breakdowns.")
 
-    # Extract available months from data
     available_months = (
         sorted(master_camp["Derived_Month"].unique())
         if not master_camp.empty and "Derived_Month" in master_camp.columns
@@ -284,7 +313,7 @@ if has_data:
 
   # --- TAB 2: Weekly Comparison (WOW) ---
   with main_tabs[1]:
-    st.setHeader = "Weekly Comparison & WOW Tracker"
+    st.header("Weekly Comparison & WOW Tracker")
     st.markdown("Week-over-week performance tracking and comparative views.")
 
     available_weeks = (
@@ -453,4 +482,7 @@ if has_data:
       st.dataframe(summary_ci, use_container_width=True)
 
 else:
-  st.info("👈 Please upload your raw files in the sidebar to load the dashboard.")
+  st.info(
+      "👈 Please upload your raw performance files in the sidebar upload center"
+      " to load the dashboard."
+  )
