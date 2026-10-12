@@ -31,40 +31,40 @@ st.markdown(
 
 st.sidebar.header("📁 File Upload Center")
 st.sidebar.markdown(
-    "Use the 5 upload buttons below. Each supports multiple file uploads"
-    " simultaneously and automatically recognizes file types."
+    "Use the 5 **Upload Files** sections below. Each supports multiple file"
+    " uploads simultaneously."
 )
 
-# 5 Separate Multi-Upload Buttons in Sidebar
+# 5 Separate Upload Files Tabs / Expanders / File Uploaders in Sidebar
 up_campaign_files = st.sidebar.file_uploader(
-    "Upload Campaign Files (Multi-select)",
+    "Upload Files (Campaign)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    key="camp_up",
+    key="camp_files",
 )
 up_city_files = st.sidebar.file_uploader(
-    "Upload City Files (Multi-select)",
+    "Upload Files (City)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    key="city_up",
+    key="city_files",
 )
 up_product_files = st.sidebar.file_uploader(
-    "Upload Product Files (Multi-select)",
+    "Upload Files (Product)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    key="prod_up",
+    key="prod_files",
 )
 up_keyword_files = st.sidebar.file_uploader(
-    "Upload Keyword Files (Multi-select)",
+    "Upload Files (Keyword)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    key="kw_up",
+    key="kw_files",
 )
 up_extra_files = st.sidebar.file_uploader(
-    "Upload Archive / Mixed Files (Auto-recognize)",
+    "Upload Files (Archive / Mixed)",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    key="extra_up",
+    key="extra_files",
 )
 
 
@@ -118,7 +118,7 @@ def process_and_categorize(file_list, category_hint=None):
       st.sidebar.error(f"Error reading {f.name}: {e}")
 
 
-# Process all 5 uploaders with precise routing and auto-recognition
+# Process all 5 upload sections with precise routing and auto-recognition
 process_and_categorize(up_campaign_files, "campaign")
 process_and_categorize(up_city_files, "city")
 process_and_categorize(up_product_files, "product")
@@ -483,6 +483,6 @@ if has_data:
 
 else:
   st.info(
-      "👈 Please upload your raw performance files in the sidebar upload center"
-      " to load the dashboard."
+      "👈 Please upload your raw performance files using the sidebar 'Upload"
+      " Files' tabs to load the dashboard."
   )
