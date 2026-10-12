@@ -7,17 +7,32 @@ st.set_page_config(
     page_title="Zepto Weekly Monthly overview", page_icon="📊", layout="wide"
 )
 
-# Custom Styling for Compact Light Blue Curved Summary Box & UI
+# Professional, Compact Design Styling
 st.markdown(
     """
     <style>
-    .summary-box {
-        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-        border: 1px solid #7dd3fc;
-        border-radius: 12px;
-        padding: 15px 20px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-        margin-bottom: 20px;
+    /* Sleek KPI Metric Card Styling */
+    .metric-card {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px 16px;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+        text-align: left;
+        margin-bottom: 10px;
+    }
+    .metric-title {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+    .metric-value {
+        color: #0f172a;
+        font-size: 20px;
+        font-weight: 700;
     }
     </style>
     """,
@@ -50,7 +65,7 @@ def extract_period_info(filename_or_text):
   w_match = re.search(r"week-?\d+", text, re.IGNORECASE)
 
   month = m_match.group(0).capitalize() if m_match else "Current Month"
-  week = w_match.group(0).upper() if w_match else "Week-Current"
+  week = w_match.group(0).upper() if w_match else "Week-37"
   return month, week
 
 
@@ -143,36 +158,34 @@ if has_data:
       (tot_orders / tot_clicks) * 100 if tot_clicks > 0 else 10.07
   )
 
-  st.markdown("### Overall Summary")
-  st.markdown(
-      f"""
-    <div class="summary-box">
-        <table style="width:100%; border:none; text-align:center;">
-            <tr style="color: #0369a1; font-weight: 600; font-size: 13px;">
-                <td>Total Sales (Revenue)</td>
-                <td>Budget Spends</td>
-                <td>Total Orders</td>
-                <td>Add to Cart (ATC)</td>
-                <td>Clicks</td>
-                <td>CTR</td>
-                <td>CVR</td>
-                <td>Average ROAS</td>
-            </tr>
-            <tr style="color: #0f172a; font-weight: 700; font-size: 16px; padding-top: 5px;">
-                <td>₹{tot_sales:,.0f}</td>
-                <td>₹{tot_spend:,.0f}</td>
-                <td>{tot_orders:,.0f}</td>
-                <td>{tot_atc:,.0f}</td>
-                <td>{tot_clicks:,.0f}</td>
-                <td>{calc_ctr:.2f}%</td>
-                <td>{calc_cvr:.2f}%</td>
-                <td>{avg_roas:.2f}x</td>
-            </tr>
-        </table>
-    </div>
-    """,
-      unsafe_allow_html=True,
-  )
+  # Compact Professional Dashboard Overview Grid
+  st.markdown("### Executive Overview")
+  cols = st.columns(8)
+  
+  metrics_data = [
+      ("Revenue", f"₹{tot_sales:,.0f}"),
+      ("Spend", f"₹{tot_spend:,.0f}"),
+      ("Orders", f"{tot_orders:,.0f}"),
+      ("ATC", f"{tot_atc:,.0f}"),
+      ("Clicks", f"{tot_clicks:,.0f}"),
+      ("CTR", f"{calc_ctr:.2f}%"),
+      ("CVR", f"{calc_cvr:.2f}%"),
+      ("ROAS", f"{avg_roas:.2f}x")
+  ]
+
+  for i, (title, val) in enumerate(metrics_data):
+    with cols[i]:
+      st.markdown(
+          f"""
+            <div class="metric-card">
+                <div class="metric-title">{title}</div>
+                <div class="metric-value">{val}</div>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+  st.markdown("<br>", unsafe_allow_html=True)
 
   # Main Navigation Tabs
   main_tabs = st.tabs([
@@ -326,7 +339,7 @@ if has_data:
       all_wow_weeks = (
           sorted(master_camp["Derived_Week"].unique(), reverse=True)
           if "Derived_Week" in master_camp.columns
-          else ["Week-Current"]
+          else ["Week-37"]
       )
       st.selectbox("Choose Week", ["All Weeks"] + all_wow_weeks, key="wow_summary_filter")
 
