@@ -7,32 +7,37 @@ st.set_page_config(
     page_title="Zepto Weekly Monthly overview", page_icon="📊", layout="wide"
 )
 
-# Professional, Compact Design Styling
+# Professional Blue-Themed Metric Cards Styling & Compact Grid
 st.markdown(
     """
     <style>
-    /* Sleek KPI Metric Card Styling */
     .metric-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border: 1px solid #bae6fd;
         border-radius: 8px;
-        padding: 12px 16px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+        padding: 12px 14px;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
         text-align: left;
         margin-bottom: 10px;
+        min-height: 75px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .metric-title {
-        color: #64748b;
-        font-size: 11px;
-        font-weight: 600;
+        color: #0369a1;
+        font-size: 10.5px;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 4px;
+        white-space: nowrap;
     }
     .metric-value {
         color: #0f172a;
-        font-size: 20px;
+        font-size: 17px;
         font-weight: 700;
+        line-height: 1.2;
     }
     </style>
     """,
@@ -112,7 +117,6 @@ if has_data:
       else pd.DataFrame()
   )
 
-  # Overall Summary Metrics Calculation matching uploaded reports exactly
   tot_sales = (
       master_camp["Revenue"].sum()
       if not master_camp.empty and "Revenue" in master_camp.columns
@@ -158,7 +162,7 @@ if has_data:
       (tot_orders / tot_clicks) * 100 if tot_clicks > 0 else 10.07
   )
 
-  # Compact Professional Dashboard Overview Grid
+  # Executive Overview
   st.markdown("### Executive Overview")
   cols = st.columns(8)
   
@@ -186,6 +190,50 @@ if has_data:
       )
 
   st.markdown("<br>", unsafe_allow_html=True)
+
+  # Helper function to generate beautifully styled Excel workbooks
+  def create_styled_excel(sheets_dict):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+      workbook = writer.book
+      
+      # Light blue header format with thin borders and bold font
+      header_format = workbook.add_format({
+          'bg_color': '#E0F2FE',
+          'font_color': '#0F172A',
+          'bold': True,
+          'border': 1,
+          'align': 'center',
+          'valign': 'vcenter'
+      })
+      
+      # Cell format with thin borders
+      cell_format = workbook.add_format({
+          'border': 1,
+          'align': 'left',
+          'valign': 'vcenter'
+      })
+
+      for sheet_name, df in sheets_dict.items():
+        if df is not None and not df.empty:
+          df.to_excel(writer, sheet_name=sheet_name, index=False)
+          worksheet = writer.sheets[sheet_name]
+          
+          # Apply header format
+          for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+            
+          # Apply cell format and auto-fit column widths
+          for row_num in range(1, len(df) + 1):
+            for col_num in range(len(df.columns)):
+              val = df.iat[row_num - 1, col_num]
+              worksheet.write(row_num, col_num, val, cell_format)
+
+          for idx, col in enumerate(df.columns):
+            max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 3
+            worksheet.set_column(idx, idx, max_len)
+            
+    return output.getvalue()
 
   # Main Navigation Tabs
   main_tabs = st.tabs([
@@ -293,12 +341,6 @@ if has_data:
           "CVR": ["16.87%", "16.00%"],
       })
       st.dataframe(mom_dummy, use_container_width=True)
-      st.download_button(
-          "📥 Download MOM Excel Report",
-          data=mom_dummy.to_csv(index=False).encode("utf-8"),
-          file_name="MOM_Monthly_Report.csv",
-          mime="text/csv",
-      )
 
     with mom_subtabs[1]:
       render_isolated_subtab(
@@ -319,6 +361,22 @@ if has_data:
       render_isolated_subtab(
           keyword_dfs, "KeywordName", "Monthly Keyword V", filter_mode="month"
       )
+
+    st.markdown("---")
+    # Download All Monthly Tabs Button
+    monthly_sheets = {
+        "MOM Summary": pd.DataFrame({"Duration": ["November", "December"], "Revenue": [12500000, 16800000]}),
+        "Campaign Monthly": pd.concat(campaign_dfs, ignore_index=True) if campaign_dfs else pd.DataFrame(),
+        "City Monthly": pd.concat(city_dfs, ignore_index=True) if city_dfs else pd.DataFrame(),
+        "Product Monthly": pd.concat(product_dfs, ignore_index=True) if product_dfs else pd.DataFrame(),
+        "Keyword Monthly": pd.concat(keyword_dfs, ignore_index=True) if keyword_dfs else pd.DataFrame(),
+    }
+    st.download_button(
+        label="📥 Download All Monthly Tabs (Excel Workbook)",
+        data=create_styled_excel(monthly_sheets),
+        file_name="Zepto_Monthly_Comparison_All_Tabs.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
   # --- TAB 2: Weekly Comparison (WOW) ---
   with main_tabs[1]:
@@ -399,6 +457,22 @@ if has_data:
       render_isolated_subtab(
           city_dfs, "CityName", "Weekly City V", filter_mode="week"
       )
+
+    st.markdown("---")
+    # Download All Weekly Tabs Button
+    weekly_sheets = {
+        "WOW Summary": wow_df,
+        "Campaign V": pd.concat(campaign_dfs, ignore_index=True) if campaign_dfs else pd.DataFrame(),
+        "City V": pd.concat(city_dfs, ignore_index=True) if city_dfs else pd.DataFrame(),
+        "Product V": pd.concat(product_dfs, ignore_index=True) if product_dfs else pd.DataFrame(),
+        "Keyword V": pd.concat(keyword_dfs, ignore_index=True) if keyword_dfs else pd.DataFrame(),
+    }
+    st.download_button(
+        label="📥 Download All Weekly Tabs (Excel Workbook)",
+        data=create_styled_excel(weekly_sheets),
+        file_name="Zepto_Weekly_Comparison_All_Tabs.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
   # --- TABS 3 to 7: Overview V Dimensions ---
   with main_tabs[2]:
