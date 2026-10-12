@@ -31,12 +31,15 @@ st.markdown(
 
 st.sidebar.header("📁 File Upload Center")
 
-# Uniform, single multi-file upload button with no cluttered headings
+# Single uniform multi-file upload button
 uploaded_files = st.sidebar.file_uploader(
     "Upload Performance Files",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    help="Upload multiple files of any type (Campaign, City, Product, Keyword).",
+    help=(
+        "Upload multiple performance reports of any type (Campaign, City,"
+        " Product, Keyword)."
+    ),
 )
 
 
@@ -52,8 +55,8 @@ def extract_period_info(filename_or_text):
   return month, week
 
 
-# Lists to hold processed DataFrames
-campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], []
+# Correctly initialize 4 separate lists for the 4 categories
+campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
 
 if uploaded_files:
   for f in uploaded_files:
