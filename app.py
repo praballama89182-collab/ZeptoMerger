@@ -308,14 +308,13 @@ if has_data:
                 else:
                   worksheet.write(row_num, col_num, val, center_cell_format)
 
-          # Column width customization: squeeze CTR, CPC, Acos, CVR tightly while preserving Revenue & Spend
           for idx, col in enumerate(df.columns):
             if col in ['Revenue', 'Spend']:
-              width = 16  # Protected wide column
+              width = 16
             elif col == 'ProductName':
               width = max(int((len(str(col)) + 1) * 0.3), 12)
             elif col in ['CTR', 'CPC', 'Acos', 'CVR', 'Roas']:
-              width = 8  # Squeezed tight for short percentage & float metrics
+              width = 8
             elif col in ['Impressions', 'Clicks', 'Orders', 'Atc']:
               width = 9
             else:
@@ -365,10 +364,61 @@ if has_data:
     else:
       st.info(f"No data available for {title}.")
 
+  mom_dummy_export = pd.DataFrame({
+      "Duration": ["November", "December"],
+      "Impressions": [850000, 1150000],
+      "Clicks": [32000, 45000],
+      "CTR": [3.76, 3.91],
+      "CPC": [15.0, 14.0],
+      "Spend": [480000, 630000],
+      "Orders": [5400, 7200],
+      "Revenue": [12500000, 16800000],
+      "Acos": [3.84, 3.75],
+      "Roas": [26.04, 26.66],
+      "CVR": [16.87, 16.00],
+  })
+
+  wow_df_export = pd.DataFrame({
+      "Duration": [
+          "Week-34 (23rd Aug to 29th Aug)",
+          "Week-35 (30th Aug to 5th Sep)",
+          "Week-36 (6th Sep to 12th Sep)",
+          "Week-37 (13th Sep to 19th Sep)",
+      ],
+      "Impressions": [534058, 408724, 265855, 275198],
+      "Clicks": [15178, 15064, 11999, 11950],
+      "CTR": [2.84, 3.69, 4.51, 4.34],
+      "CPC": [26.0, 17.0, 12.0, 13.0],
+      "Spend": [395871, 257226, 143559, 152427],
+      "Orders": [1868, 2075, 1947, 2136],
+      "Revenue": [4752028, 4879725, 4556353, 4984664],
+      "Acos": [8.33, 5.27, 3.15, 3.06],
+      "Roas": [12.00, 18.97, 31.74, 32.70],
+      "CVR": [12.31, 13.77, 16.23, 17.87],
+  })
+
   # --- TAB 1: Monthly Comparison (MOM) ---
   with main_tabs[0]:
     st.header("Monthly Comparison & MOM Analysis")
     st.markdown("Analyze monthly performance with dedicated month filters.")
+
+    # Persistent Download Button for Monthly View placed above subtabs
+    monthly_sheets = {
+        "MOM Summary": mom_dummy_export,
+        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
+        "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
+        "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
+        "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
+        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
+    }
+    st.download_button(
+        label="📥 Download All Monthly Tabs (Excel Workbook)",
+        data=create_styled_excel(monthly_sheets),
+        file_name="Zepto_Monthly_Comparison_All_Tabs.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download_monthly_global"
+    )
+    st.markdown("---")
 
     mom_subtabs = st.tabs([
         "MOM",
@@ -388,20 +438,14 @@ if has_data:
       )
       st.selectbox("Choose Month", ["All Months"] + all_mom_months, key="mom_summary_filter")
 
-      mom_dummy = pd.DataFrame({
-          "Duration": ["November", "December"],
-          "Impressions": [850000, 1150000],
-          "Clicks": [32000, 45000],
-          "CTR": ["3.76%", "3.91%"],
-          "CPC": ["₹15", "₹14"],
-          "Spend": ["₹480,000", "₹630,000"],
-          "Orders": [5400, 7200],
-          "Revenue": ["₹12,500,000", "₹16,800,000"],
-          "Acos": ["3.84%", "3.75%"],
-          "Roas": [26.04, 26.66],
-          "CVR": ["16.87%", "16.00%"],
-      })
-      st.dataframe(mom_dummy, use_container_width=True)
+      mom_display = mom_dummy_export.copy()
+      mom_display["CTR"] = mom_display["CTR"].apply(lambda x: f"{x:.2f}%")
+      mom_display["CPC"] = mom_display["CPC"].apply(lambda x: f"₹{x:.2f}")
+      mom_display["Acos"] = mom_display["Acos"].apply(lambda x: f"{x:.2f}%")
+      mom_display["CVR"] = mom_display["CVR"].apply(lambda x: f"{x:.2f}%")
+      mom_display["Spend"] = mom_display["Spend"].apply(lambda x: f"₹{x:,.0f}")
+      mom_display["Revenue"] = mom_display["Revenue"].apply(lambda x: f"₹{x:,.0f}")
+      st.dataframe(mom_display, use_container_width=True)
 
     with mom_subtabs[1]:
       render_isolated_subtab(
@@ -428,26 +472,28 @@ if has_data:
           keyword_dfs, "KeywordName", "Monthly Keyword V", filter_mode="month"
       )
 
-    st.markdown("---")
-    monthly_sheets = {
-        "MOM Summary": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
-        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
-        "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
-        "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
-        "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
-        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
-    }
-    st.download_button(
-        label="📥 Download All Monthly Tabs (Excel Workbook)",
-        data=create_styled_excel(monthly_sheets),
-        file_name="Zepto_Monthly_Comparison_All_Tabs.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
   # --- TAB 2: Weekly Comparison (WOW) ---
   with main_tabs[1]:
     st.header("Weekly Comparison & WOW Tracker")
     st.markdown("Week-over-week performance tracking with dedicated week filters.")
+
+    # Persistent Download Button for Weekly View placed above subtabs
+    weekly_sheets = {
+        "WOW Summary": wow_df_export,
+        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
+        "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
+        "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
+        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
+        "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
+    }
+    st.download_button(
+        label="📥 Download All Weekly Tabs (Excel Workbook)",
+        data=create_styled_excel(weekly_sheets),
+        file_name="Zepto_Weekly_Comparison_All_Tabs.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download_weekly_global"
+    )
+    st.markdown("---")
 
     wow_subtabs = st.tabs([
         "WOW",
@@ -467,25 +513,14 @@ if has_data:
       )
       st.selectbox("Choose Week", ["All Weeks"] + all_wow_weeks, key="wow_summary_filter")
 
-      wow_df = pd.DataFrame({
-          "Duration": [
-              "Week-34 (23rd Aug to 29th Aug)",
-              "Week-35 (30th Aug to 5th Sep)",
-              "Week-36 (6th Sep to 12th Sep)",
-              "Week-37 (13th Sep to 19th Sep)",
-          ],
-          "Impressions": [534058, 408724, 265855, 275198],
-          "Clicks": [15178, 15064, 11999, 11950],
-          "CTR": ["2.84%", "3.69%", "4.51%", "4.34%"],
-          "CPC": ["₹26", "₹17", "₹12", "₹13"],
-          "Spend": ["₹395,871", "₹257,226", "₹143,559", "₹152,427"],
-          "Orders": [1868, 2075, 1947, 2136],
-          "Revenue": ["₹4,752,028", "₹4,879,725", "₹4,556,353", "₹4,984,664"],
-          "Acos": ["8.33%", "5.27%", "3.15%", "3.06%"],
-          "Roas": [12.00, 18.97, 31.74, 32.70],
-          "CVR": ["12.31%", "13.77%", "16.23%", "17.87%"],
-      })
-      st.dataframe(wow_df, use_container_width=True)
+      wow_display = wow_df_export.copy()
+      wow_display["CTR"] = wow_display["CTR"].apply(lambda x: f"{x:.2f}%")
+      wow_display["CPC"] = wow_display["CPC"].apply(lambda x: f"₹{x:.2f}")
+      wow_display["Acos"] = wow_display["Acos"].apply(lambda x: f"{x:.2f}%")
+      wow_display["CVR"] = wow_display["CVR"].apply(lambda x: f"{x:.2f}%")
+      wow_display["Spend"] = wow_display["Spend"].apply(lambda x: f"₹{x:,.0f}")
+      wow_display["Revenue"] = wow_display["Revenue"].apply(lambda x: f"₹{x:,.0f}")
+      st.dataframe(wow_display, use_container_width=True)
 
     with wow_subtabs[1]:
       render_isolated_subtab(
@@ -511,22 +546,6 @@ if has_data:
       render_isolated_subtab(
           city_dfs, "CityName", "Weekly City V", filter_mode="week"
       )
-
-    st.markdown("---")
-    weekly_sheets = {
-        "WOW Summary": wow_df,
-        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
-        "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
-        "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
-        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName", for_export=True),
-        "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
-    }
-    st.download_button(
-        label="📥 Download All Weekly Tabs (Excel Workbook)",
-        data=create_styled_excel(weekly_sheets),
-        file_name="Zepto_Weekly_Comparison_All_Tabs.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
 
   # --- TABS 3 to 7: Overview V Dimensions ---
   with main_tabs[2]:
