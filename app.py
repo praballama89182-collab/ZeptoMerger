@@ -245,7 +245,7 @@ if has_data:
           
     return summary
 
-  # Helper function for Excel export with squeezed column spacing & protected Revenue/Spend
+  # Helper function for Excel export with squeezed CTR onwards columns
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -308,15 +308,18 @@ if has_data:
                 else:
                   worksheet.write(row_num, col_num, val, center_cell_format)
 
-          # Squeezed column sizing for maximum visibility, keeping Revenue & Spend protected
+          # Column width customization: squeeze CTR, CPC, Acos, CVR tightly while preserving Revenue & Spend
           for idx, col in enumerate(df.columns):
-            max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 1
             if col in ['Revenue', 'Spend']:
-              width = max(max_len, 16) # Protected generous width
+              width = 16  # Protected wide column
             elif col == 'ProductName':
-              width = max(int(max_len * 0.3), 12)
+              width = max(int((len(str(col)) + 1) * 0.3), 12)
+            elif col in ['CTR', 'CPC', 'Acos', 'CVR', 'Roas']:
+              width = 8  # Squeezed tight for short percentage & float metrics
+            elif col in ['Impressions', 'Clicks', 'Orders', 'Atc']:
+              width = 9
             else:
-              width = max(max_len, 7) # Squeezed tight for metrics
+              width = max(len(str(col)) + 2, 10)
             worksheet.set_column(idx, idx, width)
             
     return output.getvalue()
