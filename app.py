@@ -1,3 +1,10 @@
+You are entirely right—having repetitive individual headings above each upload button makes the sidebar cluttered. Instead, we can use a **single, uniform, clean multi-file uploader button** that accepts multiple files at once, with **no separate text headings**, and automatically recognizes and sorts every file type behind the scenes!
+
+Here is the clean, updated code for **`app.py`** with a single uniform upload button:
+
+### `app.py`
+
+```python
 import io
 import re
 import pandas as pd
@@ -30,41 +37,13 @@ st.markdown(
 )
 
 st.sidebar.header("📁 File Upload Center")
-st.sidebar.markdown(
-    "Use the 5 **Upload Files** sections below. Each supports multiple file"
-    " uploads simultaneously."
-)
 
-# 5 Separate Upload Files Tabs / Expanders / File Uploaders in Sidebar
-up_campaign_files = st.sidebar.file_uploader(
-    "Upload Files (Campaign)",
+# Uniform, single multi-file upload button with no cluttered headings
+uploaded_files = st.sidebar.file_uploader(
+    "Upload Performance Files",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
-    key="camp_files",
-)
-up_city_files = st.sidebar.file_uploader(
-    "Upload Files (City)",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True,
-    key="city_files",
-)
-up_product_files = st.sidebar.file_uploader(
-    "Upload Files (Product)",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True,
-    key="prod_files",
-)
-up_keyword_files = st.sidebar.file_uploader(
-    "Upload Files (Keyword)",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True,
-    key="kw_files",
-)
-up_extra_files = st.sidebar.file_uploader(
-    "Upload Files (Archive / Mixed)",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True,
-    key="extra_files",
+    help="Upload multiple files of any type (Campaign, City, Product, Keyword).",
 )
 
 
@@ -81,11 +60,10 @@ def extract_period_info(filename_or_text):
 
 
 # Lists to hold processed DataFrames
-campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
+campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], []
 
-
-def process_and_categorize(file_list, category_hint=None):
-  for f in file_list:
+if uploaded_files:
+  for f in uploaded_files:
     try:
       df = pd.read_excel(f)
       df["Source_File"] = f.name
@@ -94,17 +72,16 @@ def process_and_categorize(file_list, category_hint=None):
       df["Derived_Week"] = wk
 
       cols = set(df.columns)
-      cat = category_hint
+      cat = None
 
-      if not cat:
-        if "CampaignName" in cols or "CampaignType" in cols:
-          cat = "campaign"
-        elif "CityName" in cols:
-          cat = "city"
-        elif "ProductID" in cols or "ProductName" in cols:
-          cat = "product"
-        elif "KeywordName" in cols:
-          cat = "keyword"
+      if "CampaignName" in cols or "CampaignType" in cols:
+        cat = "campaign"
+      elif "CityName" in cols:
+        cat = "city"
+      elif "ProductID" in cols or "ProductName" in cols:
+        cat = "product"
+      elif "KeywordName" in cols:
+        cat = "keyword"
 
       if cat == "campaign":
         campaign_dfs.append(df)
@@ -117,25 +94,7 @@ def process_and_categorize(file_list, category_hint=None):
     except Exception as e:
       st.sidebar.error(f"Error reading {f.name}: {e}")
 
-
-# Process all 5 upload sections with precise routing and auto-recognition
-process_and_categorize(up_campaign_files, "campaign")
-process_and_categorize(up_city_files, "city")
-process_and_categorize(up_product_files, "product")
-process_and_categorize(up_keyword_files, "keyword")
-process_and_categorize(up_extra_files, None)  # Auto-recognize mixed/archive files
-
-has_data = bool(
-    campaign_dfs
-    or city_dfs
-    or product_dfs
-    or keyword_dfs
-    or up_campaign_files
-    or up_city_files
-    or up_product_files
-    or up_keyword_files
-    or up_extra_files
-)
+has_data = bool(campaign_dfs or city_dfs or product_dfs or keyword_dfs)
 
 if has_data:
   master_camp = (
@@ -483,6 +442,8 @@ if has_data:
 
 else:
   st.info(
-      "👈 Please upload your raw performance files using the sidebar 'Upload"
-      " Files' tabs to load the dashboard."
+      "👈 Please upload your performance files in the sidebar to load the"
+      " dashboard."
   )
+
+```
