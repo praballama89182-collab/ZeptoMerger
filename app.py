@@ -4,12 +4,12 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="Kratos Performance Intelligence Dashboard",
+    page_title="Zepto Reports Merger",
     page_icon="📊",
     layout="wide",
 )
 
-st.title("📊 Kratos E-Commerce Performance Intelligence Dashboard")
+st.title("📊 Zepto Reports Merger & Intelligence Dashboard")
 st.markdown(
     "Upload your raw performance reports to analyze metrics, compare weekly/monthly performance, and download formatted workbooks."
 )
@@ -34,7 +34,6 @@ keyword_files = st.sidebar.file_uploader(
 
 
 def extract_month_from_name(filename):
-  # Helper to parse month names or numbers
   match = re.search(
       r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)",
       filename,
@@ -47,7 +46,6 @@ def extract_month_from_name(filename):
 
 # Main Dashboard Logic
 if campaign_files or city_files or product_files or keyword_files:
-  # Combine uploaded campaign files for KPI overview
   all_campaigns = []
   for f in campaign_files:
     df = pd.read_excel(f)
@@ -58,7 +56,6 @@ if campaign_files or city_files or product_files or keyword_files:
   if all_campaigns:
     master_campaign_df = pd.concat(all_campaigns, ignore_index=True)
 
-    # Calculate KPIs
     total_sales = (
         master_campaign_df["Revenue"].sum()
         if "Revenue" in master_campaign_df.columns
@@ -95,7 +92,6 @@ if campaign_files or city_files or product_files or keyword_files:
     kpi5.metric("Average ROAS", f"{avg_roas:.2f}x")
     st.markdown("---")
 
-  # Dashboard Tabs
   tabs = st.tabs([
       "📅 Monthly Comparison",
       "📈 Weekly Comparison",
@@ -159,7 +155,6 @@ if campaign_files or city_files or product_files or keyword_files:
         st.info("Please upload keyword raw files.")
 
     st.markdown("---")
-    # Download Monthly Comparison Excel Button
     monthly_output = io.BytesIO()
     with pd.ExcelWriter(monthly_output, engine="xlsxwriter") as writer:
       if campaign_files:
