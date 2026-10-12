@@ -7,37 +7,38 @@ st.set_page_config(
     page_title="Zepto Weekly Monthly overview", page_icon="📊", layout="wide"
 )
 
-# Professional Blue-Themed Metric Cards Styling & Compact Grid
+# Professional Faded Blue Metric Cards Styling & Two-Row Layout
 st.markdown(
     """
     <style>
     .metric-card {
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        border: 1px solid #bae6fd;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #cbd5e1;
         border-radius: 8px;
-        padding: 12px 14px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+        padding: 10px 12px;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
         text-align: left;
-        margin-bottom: 10px;
-        min-height: 75px;
+        margin-bottom: 8px;
+        height: 70px;
         display: flex;
         flex-direction: column;
         justify-content: center;
     }
     .metric-title {
-        color: #0369a1;
-        font-size: 10.5px;
+        color: #475569;
+        font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
         white-space: nowrap;
     }
     .metric-value {
         color: #0f172a;
-        font-size: 17px;
+        font-size: 15px;
         font-weight: 700;
-        line-height: 1.2;
+        line-height: 1.1;
+        white-space: nowrap;
     }
     </style>
     """,
@@ -153,32 +154,42 @@ if has_data:
       if not master_camp.empty and "Roas" in master_camp.columns
       else 17.59
   )
-  calc_ctr = (
-      (tot_clicks / tot_impressions) * 100
-      if tot_impressions > 0
-      else 3.23
-  )
   calc_cvr = (
       (tot_orders / tot_clicks) * 100 if tot_clicks > 0 else 10.07
   )
 
-  # Executive Overview
+  # Executive Overview in Two Balanced Rows (Faded Blue Shades)
   st.markdown("### Executive Overview")
-  cols = st.columns(8)
+  row1_cols = st.columns(4)
+  row2_cols = st.columns(4)
   
-  metrics_data = [
+  metrics_row1 = [
       ("Revenue", f"₹{tot_sales:,.0f}"),
       ("Spend", f"₹{tot_spend:,.0f}"),
       ("Orders", f"{tot_orders:,.0f}"),
-      ("ATC", f"{tot_atc:,.0f}"),
+      ("ATC", f"{tot_atc:,.0f}")
+  ]
+  metrics_row2 = [
       ("Clicks", f"{tot_clicks:,.0f}"),
-      ("CTR", f"{calc_ctr:.2f}%"),
+      ("Impressions", f"{tot_impressions:,.0f}"),
       ("CVR", f"{calc_cvr:.2f}%"),
       ("ROAS", f"{avg_roas:.2f}x")
   ]
 
-  for i, (title, val) in enumerate(metrics_data):
-    with cols[i]:
+  for i, (title, val) in enumerate(metrics_row1):
+    with row1_cols[i]:
+      st.markdown(
+          f"""
+            <div class="metric-card">
+                <div class="metric-title">{title}</div>
+                <div class="metric-value">{val}</div>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+  for i, (title, val) in enumerate(metrics_row2):
+    with row2_cols[i]:
       st.markdown(
           f"""
             <div class="metric-card">
@@ -191,13 +202,40 @@ if has_data:
 
   st.markdown("<br>", unsafe_allow_html=True)
 
-  # Helper function to generate beautifully styled Excel workbooks
+  # Helper function to generate V-format aggregated summaries for exports & tabs
+  def get_aggregated_summary(dfs_list, entity_col):
+    if not dfs_list:
+      return pd.DataFrame()
+    combined_df = pd.concat(dfs_list, ignore_index=True)
+    if entity_col not in combined_df.columns:
+      return combined_df
+      
+    summary = (
+        combined_df.groupby(entity_col)
+        .agg({
+            "Impressions": "sum",
+            "Clicks": "sum",
+            "Spend": "sum",
+            "Orders": "sum",
+            "Revenue": "sum",
+            "Atc": "sum",
+            "Roas": "mean",
+        })
+        .reset_index()
+    )
+    summary["CTR"] = (summary["Clicks"] / summary["Impressions"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
+    summary["CPC"] = (summary["Spend"] / summary["Clicks"].replace(0, 1)).apply(lambda x: f"₹{x:.2f}")
+    summary["Acos"] = (summary["Spend"] / summary["Revenue"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
+    summary["CVR"] = (summary["Orders"] / summary["Clicks"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
+    summary["Roas"] = summary["Roas"].apply(lambda x: round(x, 2))
+    return summary
+
+  # Helper function for Excel export with proper formatting
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
       workbook = writer.book
       
-      # Light blue header format with thin borders and bold font
       header_format = workbook.add_format({
           'bg_color': '#E0F2FE',
           'font_color': '#0F172A',
@@ -207,27 +245,22 @@ if has_data:
           'valign': 'vcenter'
       })
       
-      # Cell format with thin borders
-      cell_format = workbook.add_format({
-          'border': 1,
-          'align': 'left',
-          'valign': 'vcenter'
-      })
+      left_cell_format = workbook.add_format({'border': 1, 'align': 'left', 'valign': 'vcenter'})
+      center_cell_format = workbook.add_format({'border': 1, 'align': 'center', 'valign': 'vcenter'})
 
       for sheet_name, df in sheets_dict.items():
         if df is not None and not df.empty:
           df.to_excel(writer, sheet_name=sheet_name, index=False)
           worksheet = writer.sheets[sheet_name]
           
-          # Apply header format
           for col_num, value in enumerate(df.columns.values):
             worksheet.write(0, col_num, value, header_format)
             
-          # Apply cell format and auto-fit column widths
           for row_num in range(1, len(df) + 1):
             for col_num in range(len(df.columns)):
               val = df.iat[row_num - 1, col_num]
-              worksheet.write(row_num, col_num, val, cell_format)
+              cell_fmt = left_cell_format if col_num == 0 else center_cell_format
+              worksheet.write(row_num, col_num, val, cell_fmt)
 
           for idx, col in enumerate(df.columns):
             max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 3
@@ -271,37 +304,8 @@ if has_data:
               combined_df["Derived_Week"] == selected_week
           ]
 
-      if entity_col in combined_df.columns:
-        summary = (
-            combined_df.groupby(entity_col)
-            .agg({
-                "Impressions": "sum",
-                "Clicks": "sum",
-                "Spend": "sum",
-                "Orders": "sum",
-                "Revenue": "sum",
-                "Atc": "sum",
-                "Roas": "mean",
-            })
-            .reset_index()
-        )
-        summary["CTR"] = (
-            summary["Clicks"] / summary["Impressions"].replace(0, 1)
-        ).apply(lambda x: f"{x*100:.2f}%")
-        summary["CPC"] = (
-            summary["Spend"] / summary["Clicks"].replace(0, 1)
-        ).apply(lambda x: f"₹{x:.2f}")
-        summary["Acos"] = (
-            summary["Spend"] / summary["Revenue"].replace(0, 1)
-        ).apply(lambda x: f"{x*100:.2f}%")
-        summary["CVR"] = (
-            summary["Orders"] / summary["Clicks"].replace(0, 1)
-        ).apply(lambda x: f"{x*100:.2f}%")
-        summary["Roas"] = summary["Roas"].apply(lambda x: round(x, 2))
-
-        st.dataframe(summary, use_container_width=True)
-      else:
-        st.dataframe(combined_df, use_container_width=True)
+      summary = get_aggregated_summary([combined_df], entity_col)
+      st.dataframe(summary, use_container_width=True)
     else:
       st.info(f"No data available for {title}.")
 
@@ -363,13 +367,12 @@ if has_data:
       )
 
     st.markdown("---")
-    # Download All Monthly Tabs Button
     monthly_sheets = {
         "MOM Summary": pd.DataFrame({"Duration": ["November", "December"], "Revenue": [12500000, 16800000]}),
-        "Campaign Monthly": pd.concat(campaign_dfs, ignore_index=True) if campaign_dfs else pd.DataFrame(),
-        "City Monthly": pd.concat(city_dfs, ignore_index=True) if city_dfs else pd.DataFrame(),
-        "Product Monthly": pd.concat(product_dfs, ignore_index=True) if product_dfs else pd.DataFrame(),
-        "Keyword Monthly": pd.concat(keyword_dfs, ignore_index=True) if keyword_dfs else pd.DataFrame(),
+        "Campaign Monthly": get_aggregated_summary(campaign_dfs, "CampaignName"),
+        "City Monthly": get_aggregated_summary(city_dfs, "CityName"),
+        "Product Monthly": get_aggregated_summary(product_dfs, "ProductName"),
+        "Keyword Monthly": get_aggregated_summary(keyword_dfs, "KeywordName"),
     }
     st.download_button(
         label="📥 Download All Monthly Tabs (Excel Workbook)",
@@ -436,11 +439,7 @@ if has_data:
           if sel_w != "All Weeks":
             c_type_df = c_type_df[c_type_df["Derived_Week"] == sel_w]
         if "CampaignType" in c_type_df.columns:
-          ctype_summary = (
-              c_type_df.groupby("CampaignType")
-              .agg({"Revenue": "sum"})
-              .reset_index()
-          )
+          ctype_summary = get_aggregated_summary([c_type_df], "CampaignType")
           st.dataframe(ctype_summary, use_container_width=True)
 
     with wow_subtabs[3]:
@@ -459,13 +458,12 @@ if has_data:
       )
 
     st.markdown("---")
-    # Download All Weekly Tabs Button
     weekly_sheets = {
         "WOW Summary": wow_df,
-        "Campaign V": pd.concat(campaign_dfs, ignore_index=True) if campaign_dfs else pd.DataFrame(),
-        "City V": pd.concat(city_dfs, ignore_index=True) if city_dfs else pd.DataFrame(),
-        "Product V": pd.concat(product_dfs, ignore_index=True) if product_dfs else pd.DataFrame(),
-        "Keyword V": pd.concat(keyword_dfs, ignore_index=True) if keyword_dfs else pd.DataFrame(),
+        "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName"),
+        "City V": get_aggregated_summary(city_dfs, "CityName"),
+        "Product V": get_aggregated_summary(product_dfs, "ProductName"),
+        "Keyword V": get_aggregated_summary(keyword_dfs, "KeywordName"),
     }
     st.download_button(
         label="📥 Download All Weekly Tabs (Excel Workbook)",
@@ -490,11 +488,7 @@ if has_data:
         if sel_w != "All Weeks":
           df_ct = df_ct[df_ct["Derived_Week"] == sel_w]
       if "CampaignType" in df_ct.columns:
-        summary_ct = (
-            df_ct.groupby("CampaignType")
-            .agg({"Clicks": "sum", "Orders": "sum", "Revenue": "sum", "Spend": "sum"})
-            .reset_index()
-        )
+        summary_ct = get_aggregated_summary([df_ct], "CampaignType")
         st.dataframe(summary_ct, use_container_width=True)
 
   with main_tabs[4]:
