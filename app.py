@@ -31,7 +31,7 @@ st.markdown(
 
 st.sidebar.header("📁 File Upload Center")
 
-# Single uniform multi-file upload button
+# Uniform, single multi-file upload button
 uploaded_files = st.sidebar.file_uploader(
     "Upload Performance Files",
     type=["xlsx", "xls"],
@@ -55,7 +55,7 @@ def extract_period_info(filename_or_text):
   return month, week
 
 
-# Correctly initialize 4 separate lists for the 4 categories
+# Lists to hold processed DataFrames
 campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
 
 if uploaded_files:
@@ -162,26 +162,58 @@ if has_data:
       "🏙️ City V",
   ])
 
+  # --- HELPER FUNCTION FOR HIERARCHICAL V FORMATTING ---
+  def render_v_tab(dfs_list, entity_col, title):
+    st.subheader(title)
+    if dfs_list:
+      combined_df = pd.concat(dfs_list, ignore_index=True)
+      if "Derived_Week" in combined_df.columns:
+        periods = sorted(combined_df["Derived_Week"].unique(), reverse=True)
+        selected_period = st.selectbox(
+            f"Filter Period ({title}):", ["All Periods"] + periods, key=f"filter_{title}"
+        )
+        if selected_period != "All Periods":
+          combined_df = combined_df[combined_df["Derived_Week"] == selected_period]
+
+      # Pivot/Groupby to match V format (Impressions, Clicks, CTR, CPC, Spend, Orders, Revenue, Acos, Roas, CVR)
+      if entity_col in combined_df.columns:
+        summary = (
+            combined_df.groupby(entity_col)
+            .agg({
+                "Impressions": "sum",
+                "Clicks": "sum",
+                "Spend": "sum",
+                "Orders": "sum",
+                "Revenue": "sum",
+                "Atc": "sum",
+                "Roas": "mean",
+            })
+            .reset_index()
+        )
+        # Calculate derived metrics
+        summary["CTR"] = (summary["Clicks"] / summary["Impressions"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
+        summary["CPC"] = (summary["Spend"] / summary["Clicks"].replace(0, 1)).apply(lambda x: f"₹{x:.2f}")
+        summary["Acos"] = (summary["Spend"] / summary["Revenue"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
+        summary["CVR"] = (summary["Orders"] / summary["Clicks"].replace(0, 1)).apply(lambda x: f"{x*100:.2f}%")
+        summary["Roas"] = summary["Roas"].apply(lambda x: round(x, 2))
+        
+        st.dataframe(summary, use_container_width=True)
+      else:
+        st.dataframe(combined_df, use_container_width=True)
+    else:
+      st.info(f"No data available for {title}.")
+
   # --- TAB 1: Monthly Comparison (MOM) ---
   with main_tabs[0]:
     st.header("Monthly Comparison & MOM Analysis")
-    st.markdown("Analyze monthly performance, trends, and dimension breakdowns.")
-
-    available_months = (
-        sorted(master_camp["Derived_Month"].unique())
-        if not master_camp.empty and "Derived_Month" in master_camp.columns
-        else ["Current Month"]
-    )
-    selected_month_filter = st.selectbox(
-        "Filter by Month:", ["All Months"] + available_months, key="mom_filter"
-    )
+    st.markdown("Analyze monthly performance with exact V-format sub-tabs.")
 
     mom_subtabs = st.tabs([
         "MOM",
-        "Campaign Data",
-        "City Data",
-        "Product Data",
-        "Keyword Data",
+        "Campaign V",
+        "City V",
+        "Product V",
+        "Keyword V",
     ])
 
     with mom_subtabs[0]:
@@ -208,55 +240,35 @@ if has_data:
       )
 
     with mom_subtabs[1]:
-      st.subheader("Campaign Monthly Data")
-      if campaign_dfs:
-        df_c = pd.concat(campaign_dfs, ignore_index=True)
-        if selected_month_filter != "All Months" and "Derived_Month" in df_c.columns:
-          df_c = df_c[df_c["Derived_Month"] == selected_month_filter]
-        st.dataframe(df_c, use_container_width=True)
+      render_v_tab(campaign_dfs, "CampaignName", "Monthly Campaign V")
 
     with mom_subtabs[2]:
-      st.subheader("City Monthly Data")
-      if city_dfs:
-        df_ci = pd.concat(city_dfs, ignore_index=True)
-        if selected_month_filter != "All Months" and "Derived_Month" in df_ci.columns:
-          df_ci = df_ci[df_ci["Derived_Month"] == selected_month_filter]
-        st.dataframe(df_ci, use_container_width=True)
+      render_v_tab(city_dfs, "CityName", "Monthly City V")
 
     with mom_subtabs[3]:
-      st.subheader("Product Monthly Data")
-      if product_dfs:
-        df_p = pd.concat(product_dfs, ignore_index=True)
-        if selected_month_filter != "All Months" and "Derived_Month" in df_p.columns:
-          df_p = df_p[df_p["Derived_Month"] == selected_month_filter]
-        st.dataframe(df_p, use_container_width=True)
+      render_v_tab(product_dfs, "ProductName", "Monthly Product V")
 
     with mom_subtabs[4]:
-      st.subheader("Keyword Monthly Data")
-      if keyword_dfs:
-        df_k = pd.concat(keyword_dfs, ignore_index=True)
-        if selected_month_filter != "All Months" and "Derived_Month" in df_k.columns:
-          df_k = df_k[df_k["Derived_Month"] == selected_month_filter]
-        st.dataframe(df_k, use_container_width=True)
+      render_v_tab(keyword_dfs, "KeywordName", "Monthly Keyword V")
 
     st.markdown("---")
     monthly_output = io.BytesIO()
     with pd.ExcelWriter(monthly_output, engine="xlsxwriter") as writer:
       if campaign_dfs:
         pd.concat(campaign_dfs, ignore_index=True).to_excel(
-            writer, sheet_name="Campaign Monthly", index=False
+            writer, sheet_name="Campaign Monthly V", index=False
         )
       if city_dfs:
         pd.concat(city_dfs, ignore_index=True).to_excel(
-            writer, sheet_name="City Monthly", index=False
+            writer, sheet_name="City Monthly V", index=False
         )
       if product_dfs:
         pd.concat(product_dfs, ignore_index=True).to_excel(
-            writer, sheet_name="Product Monthly", index=False
+            writer, sheet_name="Product Monthly V", index=False
         )
       if keyword_dfs:
         pd.concat(keyword_dfs, ignore_index=True).to_excel(
-            writer, sheet_name="Keyword Monthly", index=False
+            writer, sheet_name="Keyword Monthly V", index=False
         )
 
     st.download_button(
@@ -269,16 +281,7 @@ if has_data:
   # --- TAB 2: Weekly Comparison (WOW) ---
   with main_tabs[1]:
     st.header("Weekly Comparison & WOW Tracker")
-    st.markdown("Week-over-week performance tracking and comparative views.")
-
-    available_weeks = (
-        sorted(master_camp["Derived_Week"].unique())
-        if not master_camp.empty and "Derived_Week" in master_camp.columns
-        else ["Week-37"]
-    )
-    selected_week_filter = st.selectbox(
-        "Filter by Week:", ["All Weeks"] + available_weeks, key="wow_filter"
-    )
+    st.markdown("Week-over-week performance tracking with exact V-format sub-tabs.")
 
     wow_subtabs = st.tabs([
         "WOW",
@@ -318,9 +321,7 @@ if has_data:
       )
 
     with wow_subtabs[1]:
-      st.subheader("Campaign V (Comparative)")
-      if campaign_dfs:
-        st.dataframe(pd.concat(campaign_dfs, ignore_index=True), use_container_width=True)
+      render_v_tab(campaign_dfs, "CampaignName", "Weekly Campaign V")
 
     with wow_subtabs[2]:
       st.subheader("Campaign Type V")
@@ -332,38 +333,17 @@ if has_data:
       st.dataframe(ctype_df, use_container_width=True)
 
     with wow_subtabs[3]:
-      st.subheader("Product V")
-      if product_dfs:
-        st.dataframe(pd.concat(product_dfs, ignore_index=True), use_container_width=True)
+      render_v_tab(product_dfs, "ProductName", "Weekly Product V")
 
     with wow_subtabs[4]:
-      st.subheader("Keyword V")
-      if keyword_dfs:
-        st.dataframe(pd.concat(keyword_dfs, ignore_index=True), use_container_width=True)
+      render_v_tab(keyword_dfs, "KeywordName", "Weekly Keyword V")
 
     with wow_subtabs[5]:
-      st.subheader("City V")
-      if city_dfs:
-        st.dataframe(pd.concat(city_dfs, ignore_index=True), use_container_width=True)
+      render_v_tab(city_dfs, "CityName", "Weekly City V")
 
   # --- TABS 3 to 7: Overview V Dimensions ---
   with main_tabs[2]:
-    st.header("🎯 Campaign V Overview")
-    if campaign_dfs:
-      df_c = pd.concat(campaign_dfs, ignore_index=True)
-      summary_c = (
-          df_c.groupby("CampaignName")
-          .agg({
-              "Clicks": "sum",
-              "Orders": "sum",
-              "Revenue": "sum",
-              "Spend": "sum",
-              "Atc": "sum",
-              "Roas": "mean",
-          })
-          .reset_index()
-      )
-      st.dataframe(summary_c, use_container_width=True)
+    render_v_tab(campaign_dfs, "CampaignName", "Campaign V Overview")
 
   with main_tabs[3]:
     st.header("🏷️ Campaign Type V Overview")
@@ -383,58 +363,13 @@ if has_data:
       st.dataframe(summary_ct, use_container_width=True)
 
   with main_tabs[4]:
-    st.header("📦 Product V Overview")
-    if product_dfs:
-      df_p = pd.concat(product_dfs, ignore_index=True)
-      summary_p = (
-          df_p.groupby("ProductName")
-          .agg({
-              "Clicks": "sum",
-              "Orders": "sum",
-              "Revenue": "sum",
-              "Spend": "sum",
-              "Atc": "sum",
-              "Roas": "mean",
-          })
-          .reset_index()
-      )
-      st.dataframe(summary_p, use_container_width=True)
+    render_v_tab(product_dfs, "ProductName", "Product V Overview")
 
   with main_tabs[5]:
-    st.header("🔍 Keyword V Overview")
-    if keyword_dfs:
-      df_k = pd.concat(keyword_dfs, ignore_index=True)
-      summary_k = (
-          df_k.groupby("KeywordName")
-          .agg({
-              "Clicks": "sum",
-              "Orders": "sum",
-              "Revenue": "sum",
-              "Spend": "sum",
-              "Atc": "sum",
-              "Roas": "mean",
-          })
-          .reset_index()
-      )
-      st.dataframe(summary_k, use_container_width=True)
+    render_v_tab(keyword_dfs, "KeywordName", "Keyword V Overview")
 
   with main_tabs[6]:
-    st.header("🏙️ City V Overview")
-    if city_dfs:
-      df_ci = pd.concat(city_dfs, ignore_index=True)
-      summary_ci = (
-          df_ci.groupby("CityName")
-          .agg({
-              "Clicks": "sum",
-              "Orders": "sum",
-              "Revenue": "sum",
-              "Spend": "sum",
-              "Atc": "sum",
-              "Roas": "mean",
-          })
-          .reset_index()
-      )
-      st.dataframe(summary_ci, use_container_width=True)
+    render_v_tab(city_dfs, "CityName", "City V Overview")
 
 else:
   st.info(
