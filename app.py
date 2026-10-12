@@ -245,7 +245,7 @@ if has_data:
           
     return summary
 
-  # Helper function for Excel export with robust value cleaning
+  # Helper function for Excel export with tight column spacing
   def create_styled_excel(sheets_dict):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -288,7 +288,6 @@ if has_data:
                   worksheet.write(row_num, col_num, "", center_cell_format)
                   continue
                   
-                # Clean string representations if any exist
                 if isinstance(val, str):
                   clean_str = val.replace('₹', '').replace('%', '').replace(',', '').strip()
                   try:
@@ -300,7 +299,6 @@ if has_data:
                 if col_name in ['Revenue', 'Spend', 'CPC']:
                   worksheet.write_number(row_num, col_num, float(val), currency_format)
                 elif col_name in ['CTR', 'Acos', 'CVR']:
-                  # If percentage is already in 0-100 range, divide by 100 for Excel percent format
                   num_val = float(val) / 100.0 if float(val) > 1 else float(val)
                   worksheet.write_number(row_num, col_num, num_val, percent_format)
                 elif col_name in ['Impressions', 'Clicks', 'Orders', 'Atc']:
@@ -310,9 +308,11 @@ if has_data:
                 else:
                   worksheet.write(row_num, col_num, val, center_cell_format)
 
+          # Tight spacing column widths for maximum visible columns on screen
           for idx, col in enumerate(df.columns):
-            max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 3
-            worksheet.set_column(idx, idx, max_len)
+            max_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 1
+            tight_width = max(max_len, 9)
+            worksheet.set_column(idx, idx, tight_width)
             
     return output.getvalue()
 
