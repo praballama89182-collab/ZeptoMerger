@@ -70,12 +70,14 @@ def extract_period_info(filename_or_text):
   )
   w_match = re.search(r"week-?\d+", text, re.IGNORECASE)
 
-  month = m_match.group(0).capitalize() if m_match else "Current Month"
-  week = w_match.group(0).upper() if w_match else "Week-37"
+  month = m_match.group(0).capitalize() if m_match else None
+  week = w_match.group(0).upper() if w_match else None
   return month, week
 
 
 campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
+has_explicit_month = False
+has_explicit_week = False
 
 if uploaded_files:
   for f in uploaded_files:
@@ -83,8 +85,13 @@ if uploaded_files:
       df = pd.read_excel(f)
       df["Source_File"] = f.name
       mo, wk = extract_period_info(f.name)
-      df["Derived_Month"] = mo
-      df["Derived_Week"] = wk
+      if mo:
+        has_explicit_month = True
+      if wk:
+        has_explicit_week = True
+        
+      df["Derived_Month"] = mo if mo else "Current Period"
+      df["Derived_Week"] = wk if wk else "Current Period"
 
       cols = set(df.columns)
       cat = None
@@ -339,72 +346,116 @@ if has_data:
     if dfs_list:
       combined_df = pd.concat(dfs_list, ignore_index=True)
 
-      if filter_mode == "month" and "Derived_Month" in combined_df.columns:
-        months = sorted(combined_df["Derived_Month"].unique())
-        selected_month = st.selectbox(
-            "Choose Month", ["All Months"] + months, key=f"subtab_month_{title}"
-        )
-        if selected_month != "All Months":
-          combined_df = combined_df[
-              combined_df["Derived_Month"] == selected_month
-          ]
+      if filter_mode == "month" and "Derived_Month" in combined_df.columns and has_explicit_month:
+        months = sorted([m for m in combined_df["Derived_Month"].unique() if m != "Current Period"])
+        if months:
+          selected_month = st.selectbox(
+              "Choose Month", ["All Months"] + months, key=f"subtab_month_{title}"
+          )
+          if selected_month != "All Months":
+            combined_df = combined_df[
+                combined_df["Derived_Month"] == selected_month
+            ]
 
-      elif filter_mode == "week" and "Derived_Week" in combined_df.columns:
-        weeks = sorted(combined_df["Derived_Week"].unique(), reverse=True)
-        selected_week = st.selectbox(
-            "Choose Week", ["All Weeks"] + weeks, key=f"subtab_week_{title}"
-        )
-        if selected_week != "All Weeks":
-          combined_df = combined_df[
-              combined_df["Derived_Week"] == selected_week
-          ]
+      elif filter_mode == "week" and "Derived_Week" in combined_df.columns and has_explicit_week:
+        weeks = sorted([w for w in combined_df["Derived_Week"].unique() if w != "Current Period"], reverse=True)
+        if weeks:
+          selected_week = st.selectbox(
+              "Choose Week", ["All Weeks"] + weeks, key=f"subtab_week_{title}"
+          )
+          if selected_week != "All Weeks":
+            combined_df = combined_df[
+                combined_df["Derived_Week"] == selected_week
+            ]
 
       summary = get_aggregated_summary([combined_df], entity_col, for_export=False)
       st.dataframe(summary, use_container_width=True)
     else:
       st.info(f"No data available for {title}.")
 
-  mom_dummy_export = pd.DataFrame({
-      "Duration": ["November", "December"],
-      "Impressions": [850000, 1150000],
-      "Clicks": [32000, 45000],
-      "CTR": [3.76, 3.91],
-      "CPC": [15.0, 14.0],
-      "Spend": [480000, 630000],
-      "Orders": [5400, 7200],
-      "Revenue": [12500000, 16800000],
-      "Acos": [3.84, 3.75],
-      "Roas": [26.04, 26.66],
-      "CVR": [16.87, 16.00],
-  })
+  # Datasets for MOM / WOW
+  if has_explicit_month:
+    mom_dummy_export = pd.DataFrame({
+        "Duration": ["November", "December"],
+        "Impressions": [850000, 1150000],
+        "Clicks": [32000, 45000],
+        "CTR": [3.76, 3.91],
+        "CPC": [15.0, 14.0],
+        "Spend": [480000, 630000],
+        "Orders": [5400, 7200],
+        "Revenue": [12500000, 16800000],
+        "Acos": [3.84, 3.75],
+        "Roas": [26.04, 26.66],
+        "CVR": [16.87, 16.00],
+    })
+  else:
+    tot_ctr = (tot_clicks / tot_impressions * 100) if tot_impressions > 0 else 0.0
+    tot_cpc = (tot_spend / tot_clicks) if tot_clicks > 0 else 0.0
+    tot_acos = (tot_spend / tot_sales * 100) if tot_sales > 0 else 0.0
+    tot_cvr = (tot_orders / tot_clicks * 100) if tot_clicks > 0 else 0.0
+    mom_dummy_export = pd.DataFrame({
+        "Duration": ["Current Overview"],
+        "Impressions": [tot_impressions],
+        "Clicks": [tot_clicks],
+        "CTR": [round(tot_ctr, 2)],
+        "CPC": [round(tot_cpc, 2)],
+        "Spend": [tot_spend],
+        "Orders": [tot_orders],
+        "Revenue": [tot_sales],
+        "Acos": [round(tot_acos, 2)],
+        "Roas": [round(avg_roas, 2)],
+        "CVR": [round(tot_cvr, 2)],
+    })
 
-  wow_df_export = pd.DataFrame({
-      "Duration": [
-          "Week-34 (23rd Aug to 29th Aug)",
-          "Week-35 (30th Aug to 5th Sep)",
-          "Week-36 (6th Sep to 12th Sep)",
-          "Week-37 (13th Sep to 19th Sep)",
-      ],
-      "Impressions": [534058, 408724, 265855, 275198],
-      "Clicks": [15178, 15064, 11999, 11950],
-      "CTR": [2.84, 3.69, 4.51, 4.34],
-      "CPC": [26.0, 17.0, 12.0, 13.0],
-      "Spend": [395871, 257226, 143559, 152427],
-      "Orders": [1868, 2075, 1947, 2136],
-      "Revenue": [4752028, 4879725, 4556353, 4984664],
-      "Acos": [8.33, 5.27, 3.15, 3.06],
-      "Roas": [12.00, 18.97, 31.74, 32.70],
-      "CVR": [12.31, 13.77, 16.23, 17.87],
-  })
+  if has_explicit_week:
+    wow_df_export = pd.DataFrame({
+        "Duration": [
+            "Week-34 (23rd Aug to 29th Aug)",
+            "Week-35 (30th Aug to 5th Sep)",
+            "Week-36 (6th Sep to 12th Sep)",
+            "Week-37 (13th Sep to 19th Sep)",
+        ],
+        "Impressions": [534058, 408724, 265855, 275198],
+        "Clicks": [15178, 15064, 11999, 11950],
+        "CTR": [2.84, 3.69, 4.51, 4.34],
+        "CPC": [26.0, 17.0, 12.0, 13.0],
+        "Spend": [395871, 257226, 143559, 152427],
+        "Orders": [1868, 2075, 1947, 2136],
+        "Revenue": [4752028, 4879725, 4556353, 4984664],
+        "Acos": [8.33, 5.27, 3.15, 3.06],
+        "Roas": [12.00, 18.97, 31.74, 32.70],
+        "CVR": [12.31, 13.77, 16.23, 17.87],
+    })
+  else:
+    tot_ctr = (tot_clicks / tot_impressions * 100) if tot_impressions > 0 else 0.0
+    tot_cpc = (tot_spend / tot_clicks) if tot_clicks > 0 else 0.0
+    tot_acos = (tot_spend / tot_sales * 100) if tot_sales > 0 else 0.0
+    tot_cvr = (tot_orders / tot_clicks * 100) if tot_clicks > 0 else 0.0
+    wow_df_export = pd.DataFrame({
+        "Duration": ["Current Overview"],
+        "Impressions": [tot_impressions],
+        "Clicks": [tot_clicks],
+        "CTR": [round(tot_ctr, 2)],
+        "CPC": [round(tot_cpc, 2)],
+        "Spend": [tot_spend],
+        "Orders": [tot_orders],
+        "Revenue": [tot_sales],
+        "Acos": [round(tot_acos, 2)],
+        "Roas": [round(avg_roas, 2)],
+        "CVR": [round(tot_cvr, 2)],
+    })
 
   # --- TAB 1: Monthly Comparison (MOM) ---
   with main_tabs[0]:
-    st.header("Monthly Comparison & MOM Analysis")
-    st.markdown("Analyze monthly performance with dedicated month filters.")
+    if has_explicit_month:
+      st.header("Monthly Comparison & MOM Analysis")
+      st.markdown("Analyze monthly performance with dedicated month filters.")
+    else:
+      st.header("Monthly Overview")
+      st.markdown("Overall performance summary (No month specified in filenames).")
 
-    # Persistent Download Button for Monthly View placed above subtabs
     monthly_sheets = {
-        "MOM Summary": mom_dummy_export,
+        "MOM Summary" if has_explicit_month else "Monthly Overview": mom_dummy_export,
         "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
         "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
         "City V": get_aggregated_summary(city_dfs, "CityName", for_export=True),
@@ -421,7 +472,7 @@ if has_data:
     st.markdown("---")
 
     mom_subtabs = st.tabs([
-        "MOM",
+        "MOM / Summary" if has_explicit_month else "Overview",
         "Campaign V",
         "Campaign Type V",
         "City V",
@@ -430,13 +481,11 @@ if has_data:
     ])
 
     with mom_subtabs[0]:
-      st.subheader("Month-on-Month (MOM) Performance")
-      all_mom_months = (
-          sorted(master_camp["Derived_Month"].unique())
-          if "Derived_Month" in master_camp.columns
-          else ["Current Month"]
-      )
-      st.selectbox("Choose Month", ["All Months"] + all_mom_months, key="mom_summary_filter")
+      st.subheader("Month-on-Month Performance" if has_explicit_month else "Overall Monthly Summary")
+      if has_explicit_month:
+        all_mom_months = sorted([m for m in master_camp["Derived_Month"].unique() if m != "Current Period"])
+        if all_mom_months:
+          st.selectbox("Choose Month", ["All Months"] + all_mom_months, key="mom_summary_filter")
 
       mom_display = mom_dummy_export.copy()
       mom_display["CTR"] = mom_display["CTR"].apply(lambda x: f"{x:.2f}%")
@@ -474,12 +523,15 @@ if has_data:
 
   # --- TAB 2: Weekly Comparison (WOW) ---
   with main_tabs[1]:
-    st.header("Weekly Comparison & WOW Tracker")
-    st.markdown("Week-over-week performance tracking with dedicated week filters.")
+    if has_explicit_week:
+      st.header("Weekly Comparison & WOW Tracker")
+      st.markdown("Week-over-week performance tracking with dedicated week filters.")
+    else:
+      st.header("Weekly Overview")
+      st.markdown("Overall performance summary (No week specified in filenames).")
 
-    # Persistent Download Button for Weekly View placed above subtabs
     weekly_sheets = {
-        "WOW Summary": wow_df_export,
+        "WOW Summary" if has_explicit_week else "Weekly Overview": wow_df_export,
         "Campaign V": get_aggregated_summary(campaign_dfs, "CampaignName", for_export=True),
         "Campaign Type V": get_aggregated_summary(campaign_dfs, "CampaignType", for_export=True),
         "Product V": get_aggregated_summary(product_dfs, "ProductName", for_export=True),
@@ -496,7 +548,7 @@ if has_data:
     st.markdown("---")
 
     wow_subtabs = st.tabs([
-        "WOW",
+        "WOW / Summary" if has_explicit_week else "Overview",
         "Campaign V",
         "Campaign Type V",
         "Product V",
@@ -505,13 +557,11 @@ if has_data:
     ])
 
     with wow_subtabs[0]:
-      st.subheader("Week-over-Week (WOW) Performance")
-      all_wow_weeks = (
-          sorted(master_camp["Derived_Week"].unique(), reverse=True)
-          if "Derived_Week" in master_camp.columns
-          else ["Week-37"]
-      )
-      st.selectbox("Choose Week", ["All Weeks"] + all_wow_weeks, key="wow_summary_filter")
+      st.subheader("Week-over-Week Performance" if has_explicit_week else "Overall Weekly Summary")
+      if has_explicit_week:
+        all_wow_weeks = sorted([w for w in master_camp["Derived_Week"].unique() if w != "Current Period"], reverse=True)
+        if all_wow_weeks:
+          st.selectbox("Choose Week", ["All Weeks"] + all_wow_weeks, key="wow_summary_filter")
 
       wow_display = wow_df_export.copy()
       wow_display["CTR"] = wow_display["CTR"].apply(lambda x: f"{x:.2f}%")
