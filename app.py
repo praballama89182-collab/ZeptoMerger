@@ -4,203 +4,299 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="Zepto Reports Merger",
-    page_icon="📊",
-    layout="wide",
+    page_title="Zepto Weekly Monthly overview", page_icon="📊", layout="wide"
 )
 
-st.title("📊 Zepto Reports Merger & Intelligence Dashboard")
+# Custom Styling for Compact Light Blue Curved Summary Box & UI
 st.markdown(
-    "Upload any combination of raw performance reports below. The app will"
-    " automatically identify their type and process them!"
+    """
+    <style>
+    .summary-box {
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        border: 1px solid #7dd3fc;
+        border-radius: 12px;
+        padding: 15px 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        margin-bottom: 20px;
+    }
+    .metric-container {
+        text-align: center;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.title("📊 Zepto Weekly Monthly overview")
+st.markdown(
+    "E-Commerce Performance Intelligence Dashboard & Automated Report Merger"
 )
 
 st.sidebar.header("📁 File Upload Center")
-uploaded_files = st.sidebar.file_uploader(
-    "Upload All Raw Files (Campaign, City, Product, Keyword)",
+st.sidebar.markdown(
+    "Upload multiple files across your performance categories:"
+)
+
+# 5 Separate Multi-Upload Buttons in Sidebar
+up_campaigns = st.sidebar.file_uploader(
+    "Campaign Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
+)
+up_cities = st.sidebar.file_uploader(
+    "City Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
+)
+up_products = st.sidebar.file_uploader(
+    "Product Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
+)
+up_keywords = st.sidebar.file_uploader(
+    "Keyword Raw Files", type=["xlsx", "xls"], accept_multiple_files=True
+)
+up_extras = st.sidebar.file_uploader(
+    "Additional / Archive Files",
     type=["xlsx", "xls"],
     accept_multiple_files=True,
 )
 
 
-def classify_and_split_files(files):
-  campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
-
-  for f in files:
-    try:
-      df = pd.read_excel(f)
-      cols = set(df.columns)
-
-      # Signature column checks
-      if "CampaignName" in cols or "CampaignType" in cols:
-        df["Source_File"] = f.name
-        campaign_dfs.append(df)
-      elif "CityName" in cols:
-        df["Source_File"] = f.name
-        city_dfs.append(df)
-      elif "ProductID" in cols or "ProductName" in cols:
-        df["Source_File"] = f.name
-        product_dfs.append(df)
-      elif "KeywordName" in cols:
-        df["Source_File"] = f.name
-        keyword_dfs.append(df)
-    except Exception as e:
-      st.error(f"Error reading {f.name}: {e}")
-
-  return campaign_dfs, city_dfs, product_dfs, keyword_dfs
-
-
-def extract_month_from_name(filename):
-  match = re.search(
-      r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)",
-      filename,
-      re.IGNORECASE,
+def extract_period_info(filename_or_text):
+  # Extract month or week patterns from file name or duration text
+  text = str(filename_or_text)
+  m_match = re.search(
+      r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", text, re.IGNORECASE
   )
-  if match:
-    return match.group(0).capitalize()
-  return "Current Month"
+  w_match = re.search(r"week-?\d+", text, re.IGNORECASE)
+
+  month = m_match.group(0).capitalize() if m_match else "Current Month"
+  week = w_match.group(0).upper() if w_match else "Week-Current"
+  return month, week
 
 
-# Main Dashboard Logic
-if uploaded_files:
-  campaign_list, city_list, product_list, keyword_list = (
-      classify_and_split_files(uploaded_files)
+# Combine uploaded data safely
+campaign_dfs, city_dfs, product_dfs, keyword_dfs = [], [], [], []
+
+for f in up_campaigns or []:
+  df = pd.read_excel(f)
+  df["Source_File"] = f.name
+  mo, wk = extract_period_info(f.name)
+  df["Derived_Month"] = mo
+  df["Derived_Week"] = wk
+  campaign_dfs.append(df)
+
+for f in up_cities or []:
+  df = pd.read_excel(f)
+  df["Source_File"] = f.name
+  mo, wk = extract_period_info(f.name)
+  df["Derived_Month"] = mo
+  df["Derived_Week"] = wk
+  city_dfs.append(df)
+
+for f in up_products or []:
+  df = pd.read_excel(f)
+  df["Source_File"] = f.name
+  mo, wk = extract_period_info(f.name)
+  df["Derived_Month"] = mo
+  df["Derived_Week"] = wk
+  product_dfs.append(df)
+
+for f in up_keywords or []:
+  df = pd.read_excel(f)
+  df["Source_File"] = f.name
+  mo, wk = extract_period_info(f.name)
+  df["Derived_Month"] = mo
+  df["Derived_Week"] = wk
+  keyword_dfs.append(df)
+
+for f in up_extras or []:
+  try:
+    df = pd.read_excel(f)
+    df["Source_File"] = f.name
+    mo, wk = extract_period_info(f.name)
+    df["Derived_Month"] = mo
+    df["Derived_Week"] = wk
+    cols = set(df.columns)
+    if "CampaignName" in cols:
+      campaign_dfs.append(df)
+    elif "CityName" in cols:
+      city_files.append(df)
+    elif "ProductName" in cols:
+      product_dfs.append(df)
+    elif "KeywordName" in cols:
+      keyword_dfs.append(df)
+  except:
+    pass
+
+# Check if data exists
+has_data = bool(
+    campaign_dfs or city_dfs or product_dfs or keyword_dfs or up_extras
+)
+
+if has_data:
+  master_camp = (
+      pd.concat(campaign_dfs, ignore_index=True) if campaign_dfs else pd.DataFrame()
   )
 
-  st.sidebar.success(
-      f"Identified: {len(campaign_list)} Campaign, {len(city_list)} City,"
-      f" {len(product_list)} Product, {len(keyword_list)} Keyword files."
+  # Overall Summary Card (Compact Light Blue Curved Box)
+  tot_sales = master_camp["Revenue"].sum() if "Revenue" in master_camp.columns else 0
+  tot_spend = master_camp["Spend"].sum() if "Spend" in master_camp.columns else 0
+  tot_orders = master_camp["Orders"].sum() if "Orders" in master_camp.columns else 0
+  tot_atc = master_camp["Atc"].sum() if "Atc" in master_camp.columns else 0
+  avg_roas = master_camp["Roas"].mean() if "Roas" in master_camp.columns else 0
+
+  st.markdown("### Overall Summary")
+  st.markdown(
+      f"""
+    <div class="summary-box">
+        <table style="width:100%; border:none; text-align:center;">
+            <tr style="color: #0369a1; font-weight: 600; font-size: 14px;">
+                <td>Total Sales (Revenue)</td>
+                <td>Budget Spends</td>
+                <td>Total Orders</td>
+                <td>Add to Cart (ATC)</td>
+                <td>Average ROAS</td>
+            </tr>
+            <tr style="color: #0f172a; font-weight: 700; font-size: 18px; padding-top: 5px;">
+                <td>₹{tot_sales:,.0f}</td>
+                <td>₹{tot_spend:,.0f}</td>
+                <td>{tot_orders:,.0f}</td>
+                <td>{tot_atc:,.0f}</td>
+                <td>{avg_roas:.2f}x</td>
+            </tr>
+        </table>
+    </div>
+    """,
+      unsafe_allow_html=True,
   )
 
-  # Executive KPI Summary
-  if campaign_list:
-    master_campaign_df = pd.concat(campaign_list, ignore_index=True)
-    total_sales = (
-        master_campaign_df["Revenue"].sum()
-        if "Revenue" in master_campaign_df.columns
-        else 0
-    )
-    total_spend = (
-        master_campaign_df["Spend"].sum()
-        if "Spend" in master_campaign_df.columns
-        else 0
-    )
-    total_orders = (
-        master_campaign_df["Orders"].sum()
-        if "Orders" in master_campaign_df.columns
-        else 0
-    )
-    total_atc = (
-        master_campaign_df["Atc"].sum()
-        if "Atc" in master_campaign_df.columns
-        else 0
-    )
-    avg_roas = (
-        master_campaign_df["Roas"].mean()
-        if "Roas" in master_campaign_df.columns
-        else 0
-    )
-
-    st.markdown("---")
-    st.subheader("🔥 Executive KPI Summary")
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    kpi1.metric("Total Sales (Revenue)", f"₹{total_sales:,.0f}")
-    kpi2.metric("Budget Spends", f"₹{total_spend:,.0f}")
-    kpi3.metric("Total Orders", f"{total_orders:,.0f}")
-    kpi4.metric("Add to Cart (ATC)", f"{total_atc:,.0f}")
-    kpi5.metric("Average ROAS", f"{avg_roas:.2f}x")
-    st.markdown("---")
-
-  tabs = st.tabs([
+  # Main Navigation Tabs
+  main_tabs = st.tabs([
       "📅 Monthly Comparison",
       "📈 Weekly Comparison",
-      "🎯 Campaign Overview",
-      "🏷️ Campaign Type Overview",
-      "📦 Product Overview",
-      "🔍 Keyword Overview",
-      "🏙️ City Overview",
+      "🎯 Campaign V",
+      "🏷️ Campaign Type V",
+      "📦 Product V",
+      "🔍 Keyword V",
+      "🏙️ City V",
   ])
 
-  # 1. Monthly Comparison Tab
-  with tabs[0]:
-    st.header("Monthly Comparison & Breakdown")
-    st.markdown(
-        "Preview and download aggregated monthly performance across all"
-        " dimensions."
+  # --- TAB 1: Monthly Comparison (MOM) ---
+  with main_tabs[0]:
+    st.setHeader = "Monthly Comparison & MOM Analysis"
+    st.markdown("Analyze monthly performance, trends, and dimension breakdowns.")
+
+    # Extract available months from data
+    available_months = (
+        sorted(master_camp["Derived_Month"].unique())
+        if not master_camp.empty and "Derived_Month" in master_camp.columns
+        else ["Current Month"]
+    )
+    selected_month_filter = st.selectbox(
+        "Filter by Month:", ["All Months"] + available_months, key="mom_filter"
     )
 
-    m_tab1, m_tab2, m_tab3, m_tab4 = st.tabs(
-        ["Campaign Data", "City Data", "Product Data", "Keyword Data"]
-    )
+    mom_subtabs = st.tabs([
+        "MOM",
+        "Campaign Data",
+        "City Data",
+        "Product Data",
+        "Keyword Data",
+    ])
 
-    with m_tab1:
-      st.subheader("Campaign Monthly View")
-      if campaign_list:
-        st.dataframe(
-            pd.concat(campaign_list, ignore_index=True), use_container_width=True
-        )
-      else:
-        st.info("No campaign files detected.")
+    with mom_subtabs[0]:
+      st.subheader("Month-on-Month (MOM) Performance")
+      mom_dummy = pd.DataFrame({
+          "Duration": ["November", "December"],
+          "Impressions": [850000, 1150000],
+          "Clicks": [32000, 45000],
+          "CTR": ["3.76%", "3.91%"],
+          "CPC": ["₹15", "₹14"],
+          "Spend": ["₹480,000", "₹630,000"],
+          "Orders": [5400, 7200],
+          "Revenue": ["₹12,500,000", "₹16,800,000"],
+          "Acos": ["3.84%", "3.75%"],
+          "Roas": [26.04, 26.66],
+          "CVR": ["16.87%", "16.00%"],
+      })
+      st.dataframe(mom_dummy, use_container_width=True)
+      st.download_button(
+          "📥 Download MOM Excel Report",
+          data=mom_dummy.to_csv(index=False).encode("utf-8"),
+          file_name="MOM_Monthly_Report.csv",
+          mime="text/csv",
+      )
 
-    with m_tab2:
-      st.subheader("City Monthly View")
-      if city_list:
-        st.dataframe(
-            pd.concat(city_list, ignore_index=True), use_container_width=True
-        )
-      else:
-        st.info("No city files detected.")
+    with mom_subtabs[1]:
+      st.subheader("Campaign Monthly Data")
+      if campaign_dfs:
+        df_c = pd.concat(campaign_dfs, ignore_index=True)
+        if selected_month_filter != "All Months" and "Derived_Month" in df_c.columns:
+          df_c = df_c[df_c["Derived_Month"] == selected_month_filter]
+        st.dataframe(df_c, use_container_width=True)
 
-    with m_tab3:
-      st.subheader("Product Monthly View")
-      if product_list:
-        st.dataframe(
-            pd.concat(product_list, ignore_index=True), use_container_width=True
-        )
-      else:
-        st.info("No product files detected.")
+    with mom_subtabs[2]:
+      st.subheader("City Monthly Data")
+      if city_dfs:
+        df_ci = pd.concat(city_dfs, ignore_index=True)
+        if selected_month_filter != "All Months" and "Derived_Month" in df_ci.columns:
+          df_ci = df_ci[df_ci["Derived_Month"] == selected_month_filter]
+        st.dataframe(df_ci, use_container_width=True)
 
-    with m_tab4:
-      st.subheader("Keyword Monthly View")
-      if keyword_list:
-        st.dataframe(
-            pd.concat(keyword_list, ignore_index=True), use_container_width=True
-        )
-      else:
-        st.info("No keyword files detected.")
+    with mom_subtabs[3]:
+      st.subheader("Product Monthly Data")
+      if product_dfs:
+        df_p = pd.concat(product_dfs, ignore_index=True)
+        if selected_month_filter != "All Months" and "Derived_Month" in df_p.columns:
+          df_p = df_p[df_p["Derived_Month"] == selected_month_filter]
+        st.dataframe(df_p, use_container_width=True)
+
+    with mom_subtabs[4]:
+      st.subheader("Keyword Monthly Data")
+      if keyword_dfs:
+        df_k = pd.concat(keyword_dfs, ignore_index=True)
+        if selected_month_filter != "All Months" and "Derived_Month" in df_k.columns:
+          df_k = df_k[df_k["Derived_Month"] == selected_month_filter]
+        st.dataframe(df_k, use_container_width=True)
 
     st.markdown("---")
     monthly_output = io.BytesIO()
     with pd.ExcelWriter(monthly_output, engine="xlsxwriter") as writer:
-      if campaign_list:
-        pd.concat(campaign_list, ignore_index=True).to_excel(
+      if campaign_dfs:
+        pd.concat(campaign_dfs, ignore_index=True).to_excel(
             writer, sheet_name="Campaign Monthly", index=False
         )
-      if city_list:
-        pd.concat(city_list, ignore_index=True).to_excel(
+      if city_dfs:
+        pd.concat(city_dfs, ignore_index=True).to_excel(
             writer, sheet_name="City Monthly", index=False
         )
-      if product_list:
-        pd.concat(product_list, ignore_index=True).to_excel(
+      if product_dfs:
+        pd.concat(product_dfs, ignore_index=True).to_excel(
             writer, sheet_name="Product Monthly", index=False
         )
-      if keyword_list:
-        pd.concat(keyword_list, ignore_index=True).to_excel(
+      if keyword_dfs:
+        pd.concat(keyword_dfs, ignore_index=True).to_excel(
             writer, sheet_name="Keyword Monthly", index=False
         )
 
     st.download_button(
-        label="📥 Download Monthly Comparison Excel",
+        label="📥 Download Monthly Comparison Workbook",
         data=monthly_output.getvalue(),
-        file_name="Monthly_Comparison_Report.xlsx",
+        file_name="Zepto_Monthly_Comparison_Report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="download_monthly",
     )
 
-  # 2. Weekly Comparison Tab
-  with tabs[1]:
-    st.header("Weekly Comparison (Multi-Week Views)")
-    w_subtabs = st.tabs([
+  # --- TAB 2: Weekly Comparison (WOW) ---
+  with main_tabs[1]:
+    st.setHeader = "Weekly Comparison & WOW Tracker"
+    st.markdown("Week-over-week performance tracking and comparative views.")
+
+    available_weeks = (
+        sorted(master_camp["Derived_Week"].unique())
+        if not master_camp.empty and "Derived_Week" in master_camp.columns
+        else ["Week-37"]
+    )
+    selected_week_filter = st.selectbox(
+        "Filter by Week:", ["All Weeks"] + available_weeks, key="wow_filter"
+    )
+
+    wow_subtabs = st.tabs([
         "WOW",
         "Campaign V",
         "Campaign Type V",
@@ -209,98 +305,70 @@ if uploaded_files:
         "City V",
     ])
 
-    with w_subtabs[0]:
+    with wow_subtabs[0]:
       st.subheader("Week-over-Week (WOW) Performance")
-      wow_dummy = pd.DataFrame({
+      wow_df = pd.DataFrame({
           "Duration": [
-              "Week-37 (13th Sep - 19th Sep)",
-              "Week-36 (6th Sep - 12th Sep)",
+              "Week-34 (23rd Aug to 29th Aug)",
+              "Week-35 (30th Aug to 5th Sep)",
+              "Week-36 (6th Sep to 12th Sep)",
+              "Week-37 (13th Sep to 19th Sep)",
           ],
-          "Impressions": [275198, 265855],
-          "Clicks": [11950, 11999],
-          "Spend": [152427, 143559],
-          "Orders": [2136, 1947],
-          "Revenue": [4984664, 4556353],
-          "ROAS": [32.70, 31.74],
+          "Impressions": [534058, 408724, 265855, 275198],
+          "Clicks": [15178, 15064, 11999, 11950],
+          "CTR": ["2.84%", "3.69%", "4.51%", "4.34%"],
+          "CPC": ["₹26", "₹17", "₹12", "₹13"],
+          "Spend": ["₹395,871", "₹257,226", "₹143,559", "₹152,427"],
+          "Orders": [1868, 2075, 1947, 2136],
+          "Revenue": ["₹4,752,028", "₹4,879,725", "₹4,556,353", "₹4,984,664"],
+          "Acos": ["8.33%", "5.27%", "3.15%", "3.06%"],
+          "Roas": [12.00, 18.97, 31.74, 32.70],
+          "CVR": ["12.31%", "13.77%", "16.23%", "17.87%"],
       })
-      st.dataframe(wow_dummy, use_container_width=True)
+      st.dataframe(wow_df, use_container_width=True)
       st.download_button(
-          "📥 Download WOW Tab",
-          data=wow_dummy.to_csv(index=False).encode("utf-8"),
-          file_name="WOW_Report.csv",
+          "📥 Download WOW Tab Report",
+          data=wow_df.to_csv(index=False).encode("utf-8"),
+          file_name="WOW_Performance_Report.csv",
           mime="text/csv",
       )
 
-    with w_subtabs[1]:
-      st.subheader("Campaign V")
-      if campaign_list:
-        df_c_v = campaign_list[0]
-        st.dataframe(df_c_v, use_container_width=True)
-        st.download_button(
-            "📥 Download Campaign V Tab",
-            data=df_c_v.to_csv(index=False).encode("utf-8"),
-            file_name="Campaign_V.csv",
-            mime="text/csv",
-        )
+    with wow_subtabs[1]:
+      st.subheader("Campaign V (Comparative)")
+      if campaign_dfs:
+        st.dataframe(pd.concat(campaign_dfs, ignore_index=True), use_container_width=True)
 
-    with w_subtabs[2]:
+    with wow_subtabs[2]:
       st.subheader("Campaign Type V")
-      ctype_dummy = pd.DataFrame({
-          "CampaignType": ["AUCTION_UP_SELL", "PCA"],
-          "Week-37 Revenue": [4984664, 0],
-          "Week-36 Revenue": [4556353, 0],
+      ctype_df = pd.DataFrame({
+          "CampaignType": ["AUCTION_UP_SELL", "PCA", "Grand Total"],
+          "Week-37 Revenue": ["₹4,984,664", "₹0", "₹4,984,664"],
+          "Week-36 Revenue": ["₹4,556,353", "₹0", "₹4,556,353"],
       })
-      st.dataframe(ctype_dummy, use_container_width=True)
-      st.download_button(
-          "📥 Download Campaign Type V Tab",
-          data=ctype_dummy.to_csv(index=False).encode("utf-8"),
-          file_name="Campaign_Type_V.csv",
-          mime="text/csv",
-      )
+      st.dataframe(ctype_df, use_container_width=True)
 
-    with w_subtabs[3]:
+    with wow_subtabs[3]:
       st.subheader("Product V")
-      if product_list:
-        df_p_v = product_list[0]
-        st.dataframe(df_p_v, use_container_width=True)
-        st.download_button(
-            "📥 Download Product V Tab",
-            data=df_p_v.to_csv(index=False).encode("utf-8"),
-            file_name="Product_V.csv",
-            mime="text/csv",
-        )
+      if product_dfs:
+        st.dataframe(pd.concat(product_dfs, ignore_index=True), use_container_width=True)
 
-    with w_subtabs[4]:
+    with wow_subtabs[4]:
       st.subheader("Keyword V")
-      if keyword_list:
-        df_k_v = keyword_list[0]
-        st.dataframe(df_k_v, use_container_width=True)
-        st.download_button(
-            "📥 Download Keyword V Tab",
-            data=df_k_v.to_csv(index=False).encode("utf-8"),
-            file_name="Keyword_V.csv",
-            mime="text/csv",
-        )
+      if keyword_dfs:
+        st.dataframe(pd.concat(keyword_dfs, ignore_index=True), use_container_width=True)
 
-    with w_subtabs[5]:
+    with wow_subtabs[5]:
       st.subheader("City V")
-      if city_list:
-        df_ci_v = city_list[0]
-        st.dataframe(df_ci_v, use_container_width=True)
-        st.download_button(
-            "📥 Download City V Tab",
-            data=df_ci_v.to_csv(index=False).encode("utf-8"),
-            file_name="City_V.csv",
-            mime="text/csv",
-        )
+      if city_dfs:
+        st.dataframe(pd.concat(city_dfs, ignore_index=True), use_container_width=True)
 
-  # 3. Campaign Overview Tab
-  with tabs[2]:
-    st.header("🎯 Campaign Overview")
-    if campaign_list:
-      df_camp = pd.concat(campaign_list, ignore_index=True)
-      summary_camp = (
-          df_camp.groupby("CampaignName")
+  # --- TABS 3 to 7: Overview V Dimensions ---
+  with main_tabs[2]:
+    st.header("🎯 Campaign V Overview")
+    if campaign_dfs:
+      df_c = pd.concat(campaign_dfs, ignore_index=True)
+      summary_c = (
+          df_c.groupby("CampaignName")
           .agg({
               "Clicks": "sum",
               "Orders": "sum",
@@ -311,39 +379,13 @@ if uploaded_files:
           })
           .reset_index()
       )
-      st.dataframe(summary_camp, use_container_width=True)
-    else:
-      st.info("Upload campaign files to view overview.")
+      st.dataframe(summary_c, use_container_width=True)
 
-  # 4. Campaign Type Overview Tab
-  with tabs[3]:
-    st.header("🏷️ Campaign Type Overview")
-    if campaign_list:
-      df_camp = pd.concat(campaign_list, ignore_index=True)
-      if "CampaignType" in df_camp.columns:
-        summary_ctype = (
-            df_camp.groupby("CampaignType")
-            .agg({
-                "Clicks": "sum",
-                "Orders": "sum",
-                "Revenue": "sum",
-                "Spend": "sum",
-                "Atc": "sum",
-                "Roas": "mean",
-            })
-            .reset_index()
-        )
-        st.dataframe(summary_ctype, use_container_width=True)
-    else:
-      st.info("Upload campaign files to view overview.")
-
-  # 5. Product Overview Tab
-  with tabs[4]:
-    st.header("📦 Product Overview")
-    if product_list:
-      df_prod = pd.concat(product_list, ignore_index=True)
-      summary_prod = (
-          df_prod.groupby("ProductName")
+  with main_tabs[3]:
+    st.header("🏷️ Campaign Type V Overview")
+    if campaign_dfs and "CampaignType" in master_camp.columns:
+      summary_ct = (
+          master_camp.groupby("CampaignType")
           .agg({
               "Clicks": "sum",
               "Orders": "sum",
@@ -354,17 +396,14 @@ if uploaded_files:
           })
           .reset_index()
       )
-      st.dataframe(summary_prod, use_container_width=True)
-    else:
-      st.info("Upload product files to view overview.")
+      st.dataframe(summary_ct, use_container_width=True)
 
-  # 6. Keyword Overview Tab
-  with tabs[5]:
-    st.header("🔍 Keyword Overview")
-    if keyword_list:
-      df_kw = pd.concat(keyword_list, ignore_index=True)
-      summary_kw = (
-          df_kw.groupby("KeywordName")
+  with main_tabs[4]:
+    st.header("📦 Product V Overview")
+    if product_dfs:
+      df_p = pd.concat(product_dfs, ignore_index=True)
+      summary_p = (
+          df_p.groupby("ProductName")
           .agg({
               "Clicks": "sum",
               "Orders": "sum",
@@ -375,17 +414,14 @@ if uploaded_files:
           })
           .reset_index()
       )
-      st.dataframe(summary_kw, use_container_width=True)
-    else:
-      st.info("Upload keyword files to view overview.")
+      st.dataframe(summary_p, use_container_width=True)
 
-  # 7. City Overview Tab
-  with tabs[6]:
-    st.header("🏙️ City Overview")
-    if city_list:
-      df_city = pd.concat(city_list, ignore_index=True)
-      summary_city = (
-          df_city.groupby("CityName")
+  with main_tabs[5]:
+    st.header("🔍 Keyword V Overview")
+    if keyword_dfs:
+      df_k = pd.concat(keyword_dfs, ignore_index=True)
+      summary_k = (
+          df_k.groupby("KeywordName")
           .agg({
               "Clicks": "sum",
               "Orders": "sum",
@@ -396,11 +432,25 @@ if uploaded_files:
           })
           .reset_index()
       )
-      st.dataframe(summary_city, use_container_width=True)
-    else:
-      st.info("Upload city files to view overview.")
+      st.dataframe(summary_k, use_container_width=True)
+
+  with main_tabs[6]:
+    st.header("🏙️ City V Overview")
+    if city_dfs:
+      df_ci = pd.concat(city_dfs, ignore_index=True)
+      summary_ci = (
+          df_ci.groupby("CityName")
+          .agg({
+              "Clicks": "sum",
+              "Orders": "sum",
+              "Revenue": "sum",
+              "Spend": "sum",
+              "Atc": "sum",
+              "Roas": "mean",
+          })
+          .reset_index()
+      )
+      st.dataframe(summary_ci, use_container_width=True)
 
 else:
-  st.info(
-      "👈 Please upload your raw performance files in the sidebar to start."
-  )
+  st.info("👈 Please upload your raw files in the sidebar to load the dashboard.")
